@@ -47,7 +47,7 @@ jobs:
       - name: End-to-end sandbox sort
         run: |
           SB="$(mktemp -d)/desk"; APP="$(mktemp -d)/app"; mkdir -p "$SB" "$APP"
-          OLD="$(date -v-1H +%Y%m%d%H%M 2>/dev/null || date +%Y%m%d)0000"
+          OLD="$(date -v-1H +%Y%m%d%H%M)"
           for f in photo.png clip.mp4 song.mp3 report.pdf main.rs backup.zip mystery.xyz; do
             touch "$SB/$f"; touch -t "$OLD" "$SB/$f"
           done
@@ -66,7 +66,7 @@ jobs:
       - name: Collision safety (never overwrite)
         run: |
           SB="$(mktemp -d)/desk"; APP="$(mktemp -d)/app"; mkdir -p "$SB" "$APP"
-          OLD="$(date -v-1H +%Y%m%d%H%M 2>/dev/null || date +%Y%m%d)0000"
+          OLD="$(date -v-1H +%Y%m%d%H%M)"
           echo one > "$SB/dup.txt"; touch -t "$OLD" "$SB/dup.txt"
           DESKTIDY_TARGET_DIR="$SB" DESKTIDY_APP_DIR="$APP" ./build/desktidy-sort
           echo two > "$SB/dup.txt"; touch -t "$OLD" "$SB/dup.txt"
