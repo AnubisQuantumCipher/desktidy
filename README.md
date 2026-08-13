@@ -46,7 +46,7 @@ untitled-2.xyz                  📁 Inbox   ← anything it's unsure about
 ## Install
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/desktidy.git
+git clone https://github.com/AnubisQuantumCipher/desktidy.git
 cd desktidy
 ./install.sh
 ```
