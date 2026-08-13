@@ -21,6 +21,6 @@ First public release.
 ### Tested
 - Deterministic routing, safety behaviors, and self-test: verified on
   macOS 26 (Apple Silicon), AI path included.
-- The AI-excluded build path relies on Swift's `#if canImport(FoundationModels)`
-  and has been reasoned through but not yet built on a pre-26 SDK — please open
-  an issue if you hit a build problem on older macOS.
+- The AI-excluded build path (`#if canImport(FoundationModels)`) is verified by
+  CI on macOS 14 and macOS 15 runners: build, self-test, read-only probe,
+  end-to-end sandbox sort, and collision safety all pass.
