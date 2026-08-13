@@ -361,7 +361,7 @@ final class DeskTidy {
     }
 }
 
-enum DeskTidyVersion { static let string = "v1.0.0" }
+enum DeskTidyVersion { static let string = "v1.1.2" }
 
 @main
 struct DeskTidyMain {
