@@ -2,6 +2,8 @@
 
 [![CI](https://github.com/AnubisQuantumCipher/desktidy/actions/workflows/ci.yml/badge.svg)](https://github.com/AnubisQuantumCipher/desktidy/actions/workflows/ci.yml)
 
+**Website: [desktidy.vercel.app](https://desktidy.vercel.app)**
+
 **Your macOS Desktop, organized automatically.** Drop anything on your Desktop and DeskTidy files it into the right folder about twenty seconds later — and shows you a clickable notification telling you where it went. No dragging, no thinking, no maintenance.
 
 Built for people whose Desktop turns into a landfill of screenshots, downloads, and half-named files by Friday.
