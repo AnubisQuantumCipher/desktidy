@@ -154,6 +154,29 @@ It is **suggestions only** — the model never moves, renames, uploads, or delet
 
 **What if two files have the same name?** Both are kept. The second gets a `(dup …)` timestamp suffix. Nothing is ever overwritten.
 
+## For AI coding agents (and the humans who run them)
+
+If you run agents like Claude Code, Codex, or Cursor on this Mac, they'll
+sometimes write files to the Desktop — and ~20 seconds later DeskTidy files
+them, which can confuse an agent that goes back to look ("where did report.md
+go?"). Fix: make your agents DeskTidy-aware.
+
+- **Claude Code:** install the ready-made skill from [`skills/desktidy-awareness/`](skills/desktidy-awareness/SKILL.md):
+
+  ```bash
+  mkdir -p ~/.claude/skills/desktidy-awareness
+  curl -fsSL https://raw.githubusercontent.com/AnubisQuantumCipher/desktidy/main/skills/desktidy-awareness/SKILL.md \
+    -o ~/.claude/skills/desktidy-awareness/SKILL.md
+  ```
+
+- **Codex / Cursor / anything that reads AGENTS.md:** paste the block from
+  [`skills/AGENTS-SNIPPET.md`](skills/AGENTS-SNIPPET.md) into your global agents file.
+
+The short version agents need to know: files at the watched root get filed
+after ~20s; the move log (`~/Library/Application Support/DeskTidy/desktidy.log`)
+records every final path; subfolders (including `Inbox/`) are never re-sorted;
+`desktidy teardown` / `desktidy setup` pauses and resumes for Desktop-heavy work.
+
 ## Roadmap
 
 - Menu-bar app with pause/resume and a live activity feed.
