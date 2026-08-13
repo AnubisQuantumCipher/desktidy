@@ -1,5 +1,7 @@
 # DeskTidy
 
+[![CI](https://github.com/AnubisQuantumCipher/desktidy/actions/workflows/ci.yml/badge.svg)](https://github.com/AnubisQuantumCipher/desktidy/actions/workflows/ci.yml)
+
 **Your macOS Desktop, organized automatically.** Drop anything on your Desktop and DeskTidy files it into the right folder within seconds — and shows you a clickable notification telling you where it went. No dragging, no thinking, no maintenance.
 
 Built for people whose Desktop turns into a landfill of screenshots, downloads, and half-named files by Friday.
