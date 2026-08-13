@@ -47,24 +47,43 @@ untitled-2.xyz                  📁 Inbox   ← anything it's unsure about
 
 ## Install
 
+### Homebrew (recommended)
+
 ```bash
-git clone https://github.com/AnubisQuantumCipher/desktidy.git
-cd desktidy
-./install.sh
+brew install anubisquantumcipher/tap/desktidy
+desktidy setup
 ```
 
-The installer builds DeskTidy locally, loads it, and walks you through the one-time **Full Disk Access** grant (a background helper can't touch your Desktop until you allow it once). That's it.
+`setup` starts the background service and walks you through the one-time **Full Disk Access** grant (a background helper can't touch your Desktop until you allow it once). That's it.
+
+Useful commands:
+
+```bash
+desktidy status      # service, permissions, recent moves
+desktidy sort-now    # run one pass right now
+desktidy log         # follow the move log
+desktidy teardown    # stop + remove the service (files untouched)
+```
 
 Want it to organize a different folder instead of the Desktop?
 
 ```bash
-./install.sh --target ~/Downloads
+desktidy setup --target ~/Downloads
+```
+
+### From source
+
+```bash
+git clone https://github.com/AnubisQuantumCipher/desktidy.git
+cd desktidy
+./install.sh          # same flags: --target ~/Downloads
 ```
 
 ## Uninstall
 
 ```bash
-./uninstall.sh
+desktidy teardown && brew uninstall desktidy   # Homebrew install
+./uninstall.sh                                  # source install
 ```
 
 Removes the tool completely. **Your folders and every file it ever sorted stay exactly where they are** — it only removes DeskTidy itself.

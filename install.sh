@@ -61,7 +61,8 @@ else
 fi
 
 # 5) generate + install launchd agents from templates
-gen() { sed -e "s#__APPDIR__#$APPDIR#g" -e "s#__TARGET__#$TARGET#g" "$1"; }
+gen() { sed -e "s#__SORT_BIN__#$APPDIR/desktidy-sort#g" -e "s#__NOTIFY_SH__#$APPDIR/desktidy-notify.sh#g" \
+             -e "s#__APPDIR__#$APPDIR#g" -e "s#__TARGET__#$TARGET#g" "$1"; }
 gen "$SCRIPT_DIR/launchagents/com.desktidy.sort.plist.template"   > "$LA/com.desktidy.sort.plist"
 gen "$SCRIPT_DIR/launchagents/com.desktidy.notify.plist.template" > "$LA/com.desktidy.notify.plist"
 plutil -lint "$LA/com.desktidy.sort.plist" >/dev/null && plutil -lint "$LA/com.desktidy.notify.plist" >/dev/null
