@@ -7,7 +7,7 @@ folder — never data loss or data exposure:
 
 - **No network access of any kind.** The binary makes no network calls; there is
   no telemetry, no update checker, no analytics. You can verify this from the
-  source — it's ~700 lines total.
+  source — it's under 800 lines total.
 - **Never deletes.** The engine has no delete path for user files; moves are
   collision-safe (a name clash keeps both files).
 - **AI is local and advisory.** The optional triage uses Apple's on-device

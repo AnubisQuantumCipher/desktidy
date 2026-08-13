@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/AnubisQuantumCipher/desktidy/actions/workflows/ci.yml/badge.svg)](https://github.com/AnubisQuantumCipher/desktidy/actions/workflows/ci.yml)
 
-**Your macOS Desktop, organized automatically.** Drop anything on your Desktop and DeskTidy files it into the right folder within seconds — and shows you a clickable notification telling you where it went. No dragging, no thinking, no maintenance.
+**Your macOS Desktop, organized automatically.** Drop anything on your Desktop and DeskTidy files it into the right folder about twenty seconds later — and shows you a clickable notification telling you where it went. No dragging, no thinking, no maintenance.
 
 Built for people whose Desktop turns into a landfill of screenshots, downloads, and half-named files by Friday.
 
@@ -40,7 +40,7 @@ untitled-2.xyz                  📁 Inbox   ← anything it's unsure about
 
 ## Requirements
 
-- macOS 12 (Monterey) or later.
+- macOS 14 (Sonoma) or later — what CI tests. Earlier versions may work but are unverified.
 - Apple's command-line developer tools (the installer tells you how if they're missing: `xcode-select --install`).
 - *Optional:* [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) (`brew install terminal-notifier`) for **clickable** banners. Without it you still get banners, just not clickable.
 - *Optional:* macOS 26+ for the on-device AI triage. On older macOS it's simply skipped.
@@ -142,7 +142,7 @@ It is **suggestions only** — the model never moves, renames, uploads, or delet
 
 ## Contributing
 
-Issues and PRs welcome. The whole thing is ~600 lines of Swift plus two small shell scripts — easy to read and hack on. Run `desktidy-sort --self-test` after changes.
+Issues and PRs welcome. The whole thing is ~650 lines of Swift plus three small shell scripts — easy to read and hack on. Run `desktidy-sort --self-test` after changes.
 
 ## License
 

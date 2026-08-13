@@ -1,7 +1,7 @@
 # Contributing to DeskTidy
 
-Thanks for wanting to help! DeskTidy is deliberately small (~700 lines of Swift
-plus two shell scripts), and we'd like to keep it that way.
+Thanks for wanting to help! DeskTidy is deliberately small (~650 lines of Swift
+plus three small shell scripts), and we'd like to keep it that way.
 
 ## Ground rules
 

@@ -14,10 +14,13 @@ TARGET="$HOME/Desktop"
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --target) TARGET="$(cd "$2" 2>/dev/null && pwd || echo "$2")"; shift 2 ;;
+    --target)
+      TARGET="$(cd "$2" 2>/dev/null && pwd)" || { echo "Error: --target folder does not exist: $2"; exit 2; }
+      shift 2 ;;
     *) echo "Unknown option: $1"; exit 2 ;;
   esac
 done
+[ -d "$TARGET" ] || { echo "Error: target folder does not exist: $TARGET"; exit 2; }
 
 say() { printf '\033[1m%s\033[0m\n' "$*"; }
 ok()  { printf '  \033[32m✓\033[0m %s\n' "$*"; }
@@ -90,7 +93,7 @@ fi
 
 echo
 say "Done. DeskTidy is installed."
-echo "  • Drop any file on your $(basename "$TARGET") — it files itself within ~15–60s with a banner."
+echo "  • Drop any file on your $(basename "$TARGET") — it files itself in ~20s with a banner."
 echo "  • Log of every move:  $APPDIR/desktidy.log"
 echo "  • Customize folders/rules: edit src/Config.swift then re-run ./install.sh"
 echo "  • Uninstall anytime:  ./uninstall.sh   (your files are never touched)"

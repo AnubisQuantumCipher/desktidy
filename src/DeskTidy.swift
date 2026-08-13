@@ -136,7 +136,16 @@ final class DeskTidy {
             return 0
         }
 
-        let moved = deterministicSweep()
+        var (moved, skippedFresh) = deterministicSweep()
+        // Files dropped moments ago get skipped by the settle window. Instead of
+        // leaving them for the next launchd interval (worst case ~75s of visible
+        // clutter), wait out the window once and sweep again — typical time from
+        // drop to filed is then ~settleSeconds + a moment.
+        if skippedFresh > 0 {
+            try? await Task.sleep(nanoseconds: UInt64((settleSeconds + 1) * 1_000_000_000))
+            let second = deterministicSweep()
+            moved += second.moved
+        }
 
         let forceSmart = arguments.contains("--smart-now")
         #if canImport(FoundationModels)
@@ -184,7 +193,9 @@ final class DeskTidy {
     }
 
     // -- the deterministic pass --------------------------------------------
-    func deterministicSweep() -> Int {
+    // Returns how many items were filed and how many were skipped only because
+    // they were too fresh (still inside the settle window).
+    func deterministicSweep() -> (moved: Int, skippedFresh: Int) {
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .isDirectoryKey, .isSymbolicLinkKey]
         let items: [URL]
         do {
@@ -193,10 +204,11 @@ final class DeskTidy {
             ).sorted { $0.lastPathComponent.localizedStandardCompare($1.lastPathComponent) == .orderedAscending }
         } catch {
             log("ERROR: cannot list target folder: \(error.localizedDescription)")
-            return 0
+            return (0, 0)
         }
 
         var moved = 0
+        var skippedFresh = 0
         for item in items {
             let name = item.lastPathComponent
             guard !reservedRootNames.contains(name) else { continue }
@@ -204,14 +216,14 @@ final class DeskTidy {
             do {
                 let values = try item.resourceValues(forKeys: keys)
                 let modified = values.contentModificationDate ?? Date()
-                guard Date().timeIntervalSince(modified) >= settleSeconds else { continue }
+                guard Date().timeIntervalSince(modified) >= settleSeconds else { skippedFresh += 1; continue }
                 if move(item, to: classify(name: name, isDirectory: values.isDirectory == true)) { moved += 1 }
             } catch {
                 log("ERROR: could not inspect \(safeLog(name)): \(error.localizedDescription)")
             }
         }
         if moved > 0 { log("--- pass complete: \(moved) item(s) filed ---") }
-        return moved
+        return (moved, skippedFresh)
     }
 
     // -- routing ------------------------------------------------------------
@@ -243,7 +255,10 @@ final class DeskTidy {
             try fm.createDirectory(at: directory, withIntermediateDirectories: true)
             let dest = uniqueDestination(in: directory, for: source.lastPathComponent)
             try fm.moveItem(at: source, to: dest)
-            log("\(safeLog(source.lastPathComponent)) -> \(category.folderName)/")
+            // Log the FINAL name (which may carry a "(dup …)" suffix) so anything
+            // that follows the log — like the click-to-reveal notifier — points at
+            // the file that actually exists.
+            log("\(safeLog(dest.lastPathComponent)) -> \(category.folderName)/")
             return true
         } catch {
             log("ERROR: could not move \(safeLog(source.lastPathComponent)): \(error.localizedDescription)")
