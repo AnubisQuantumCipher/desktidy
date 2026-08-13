@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.desktidy.sort</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__APPDIR__/desktidy-sort</string>
+    </array>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>DESKTIDY_TARGET_DIR</key>
+        <string>__TARGET__</string>
+    </dict>
+
+    <!-- Fire when the target folder changes, and re-check every 60s as a backstop. -->
+    <key>WatchPaths</key>
+    <array>
+        <string>__TARGET__</string>
+    </array>
+    <key>StartInterval</key>
+    <integer>60</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+
+    <key>StandardOutPath</key>
+    <string>__APPDIR__/agent.out.log</string>
+    <key>StandardErrorPath</key>
+    <string>__APPDIR__/agent.err.log</string>
+</dict>
+</plist>

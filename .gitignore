@@ -1,0 +1,13 @@
+# macOS
+.DS_Store
+
+# build output
+/build/
+*.o
+desktidy-sort
+
+# local logs / runtime artifacts (should never be committed)
+*.log
+*.lock
+smart-triage-cache.json
+smart-triage.last
