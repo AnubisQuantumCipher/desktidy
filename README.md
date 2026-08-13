@@ -4,7 +4,7 @@
 
 Built for people whose Desktop turns into a landfill of screenshots, downloads, and half-named files by Friday.
 
-<!-- Add a screen recording here: docs/demo.gif -->
+![DeskTidy demo — a messy Desktop organizing itself, with a notification per move](docs/demo.gif)
 
 ```
 Before                          After

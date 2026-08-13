@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    strategy:
+      fail-fast: false
+      matrix:
+        # Older SDKs deliberately exercise the AI-compiled-OUT path
+        # (#if canImport(FoundationModels) == false). macOS 26 runners, when
+        # available, exercise the AI-compiled-IN path.
+        os: [macos-14, macos-15]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain info
+        run: |
+          sw_vers
+          xcrun swiftc --version
+
+      - name: Build
+        run: |
+          mkdir -p build
+          xcrun swiftc -O -parse-as-library src/*.swift -o build/desktidy-sort
+          codesign -s - -i com.desktidy.sort build/desktidy-sort || true
+
+      - name: Self-test (deterministic safety checks)
+        run: ./build/desktidy-sort --self-test
+
+      - name: Health
+        run: ./build/desktidy-sort --health
+
+      - name: Read-only access probe is read-only
+        run: |
+          SB="$(mktemp -d)/desk"; APP="$(mktemp -d)/app"; mkdir -p "$SB" "$APP"
+          touch "$SB/a-file.png"
+          before="$(ls -1A "$SB")"
+          DESKTIDY_TARGET_DIR="$SB" DESKTIDY_APP_DIR="$APP" ./build/desktidy-sort --check-access
+          after="$(ls -1A "$SB")"
+          test "$before" = "$after"
+
+      - name: End-to-end sandbox sort
+        run: |
+          SB="$(mktemp -d)/desk"; APP="$(mktemp -d)/app"; mkdir -p "$SB" "$APP"
+          OLD="$(date -v-1H +%Y%m%d%H%M 2>/dev/null || date +%Y%m%d)0000"
+          for f in photo.png clip.mp4 song.mp3 report.pdf main.rs backup.zip mystery.xyz; do
+            touch "$SB/$f"; touch -t "$OLD" "$SB/$f"
+          done
+          mkdir "$SB/dropped-folder"; touch -t "$OLD" "$SB/dropped-folder"
+          DESKTIDY_TARGET_DIR="$SB" DESKTIDY_APP_DIR="$APP" ./build/desktidy-sort --verbose
+          test -f "$SB/Images/photo.png"
+          test -f "$SB/Videos/clip.mp4"
+          test -f "$SB/Audio/song.mp3"
+          test -f "$SB/Documents/report.pdf"
+          test -f "$SB/Code/main.rs"
+          test -f "$SB/Archives/backup.zip"
+          test -f "$SB/Inbox/mystery.xyz"
+          test -d "$SB/Folders/dropped-folder"
+          echo "all routing assertions passed"
+
+      - name: Collision safety (never overwrite)
+        run: |
+          SB="$(mktemp -d)/desk"; APP="$(mktemp -d)/app"; mkdir -p "$SB" "$APP"
+          OLD="$(date -v-1H +%Y%m%d%H%M 2>/dev/null || date +%Y%m%d)0000"
+          echo one > "$SB/dup.txt"; touch -t "$OLD" "$SB/dup.txt"
+          DESKTIDY_TARGET_DIR="$SB" DESKTIDY_APP_DIR="$APP" ./build/desktidy-sort
+          echo two > "$SB/dup.txt"; touch -t "$OLD" "$SB/dup.txt"
+          DESKTIDY_TARGET_DIR="$SB" DESKTIDY_APP_DIR="$APP" ./build/desktidy-sort
+          count=$(find "$SB/Documents" -name 'dup*' | wc -l | tr -d ' ')
+          test "$count" -eq 2
+          echo "both copies preserved ($count)"
