@@ -1,0 +1,231 @@
+@import "tailwindcss";
+
+/* ============================================================
+   DeskTidy design tokens — "the moment after the desk is clean"
+   Light: porcelain + mist.  Dark: deep graphite (never pure black).
+   Accents: electric sky (primary), fresh mint (success/filed),
+   warm amber (Inbox / uncertainty). See WEBSITE_DESIGN_SYSTEM.md.
+   ============================================================ */
+
+:root {
+  --porcelain: #fbfbf9;
+  --mist: #f1f2f5;
+  --mist-deep: #e6e8ee;
+  --ink: #1b1e24;
+  --ink-soft: #4b5160;
+  --ink-faint: #7d8496;
+  --line: rgba(27, 30, 36, 0.1);
+  --sky: #2477ff;
+  --sky-deep: #1c60d6;
+  --sky-wash: #e8f0ff;
+  --mint: #12b981;
+  --mint-wash: #e5f8f1;
+  --amber: #e8a13d;
+  --amber-wash: #fdf3e3;
+  --card: #ffffff;
+  --shadow-soft: 0 1px 2px rgba(27, 30, 36, 0.05), 0 8px 24px rgba(27, 30, 36, 0.06);
+  --shadow-lift: 0 2px 4px rgba(27, 30, 36, 0.06), 0 16px 40px rgba(27, 30, 36, 0.12);
+
+  --bg: var(--porcelain);
+  --bg-alt: var(--mist);
+  --fg: var(--ink);
+  --fg-soft: var(--ink-soft);
+  --fg-faint: var(--ink-faint);
+
+  --radius-s: 8px;
+  --radius-m: 14px;
+  --radius-l: 22px;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+    "Helvetica Neue", "Segoe UI", Inter, Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #16181d;
+    --bg-alt: #1d2026;
+    --fg: #f2f3f6;
+    --fg-soft: #b6bac4;
+    --fg-faint: #858b99;
+    --line: rgba(242, 243, 246, 0.12);
+    --sky: #4a8dff;
+    --sky-deep: #6da3ff;
+    --sky-wash: rgba(74, 141, 255, 0.14);
+    --mint: #2fd39a;
+    --mint-wash: rgba(47, 211, 154, 0.13);
+    --amber: #f0b45c;
+    --amber-wash: rgba(240, 180, 92, 0.13);
+    --card: #22252c;
+    --shadow-soft: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.4), 0 16px 40px rgba(0, 0, 0, 0.5);
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-bg-alt: var(--bg-alt);
+  --color-fg: var(--fg);
+  --color-fg-soft: var(--fg-soft);
+  --color-fg-faint: var(--fg-faint);
+  --color-card: var(--card);
+  --color-line: var(--line);
+  --color-sky: var(--sky);
+  --color-sky-deep: var(--sky-deep);
+  --color-sky-wash: var(--sky-wash);
+  --color-mint: var(--mint);
+  --color-mint-wash: var(--mint-wash);
+  --color-amber: var(--amber);
+  --color-amber-wash: var(--amber-wash);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --radius-s: var(--radius-s);
+  --radius-m: var(--radius-m);
+  --radius-l: var(--radius-l);
+}
+
+html {
+  scroll-behavior: smooth;
+  scroll-padding-top: 5rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: var(--sky);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--sky);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+/* Skip link */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 100;
+  background: var(--sky);
+  color: #fff;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0 0 var(--radius-s) 0;
+  font-weight: 600;
+}
+.skip-link:focus {
+  left: 0;
+}
+
+/* ---------- shared building blocks ---------- */
+
+.container-site {
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: clamp(1.25rem, 4vw, 2.5rem);
+}
+
+.section-pad {
+  padding-block: clamp(4rem, 9vw, 7.5rem);
+}
+
+.h-display {
+  font-size: clamp(2.4rem, 6vw, 4.2rem);
+  line-height: 1.04;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.h-section {
+  font-size: clamp(1.75rem, 3.6vw, 2.6rem);
+  line-height: 1.12;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+}
+
+.lede {
+  font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+  line-height: 1.6;
+  color: var(--fg-soft);
+}
+
+.eyebrow {
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--sky);
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: var(--sky);
+  color: #fff;
+  font-weight: 600;
+  padding: 0.8rem 1.5rem;
+  border-radius: 999px;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  box-shadow: 0 1px 2px rgba(27, 30, 36, 0.15), 0 6px 18px color-mix(in srgb, var(--sky) 35%, transparent);
+}
+.btn-primary:hover {
+  background: var(--sky-deep);
+  transform: translateY(-1px);
+}
+.btn-primary:active {
+  transform: translateY(0);
+}
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: transparent;
+  color: var(--fg);
+  font-weight: 600;
+  padding: 0.8rem 1.5rem;
+  border-radius: 999px;
+  border: 1.5px solid var(--line);
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.btn-secondary:hover {
+  border-color: var(--fg-faint);
+  background: color-mix(in srgb, var(--fg) 4%, transparent);
+}
+
+.card-surface {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* demo stage: taller on phones so scattered files and the folder row don't collide */
+.demo-stage {
+  aspect-ratio: 3 / 4;
+}
+@media (min-width: 640px) {
+  .demo-stage {
+    aspect-ratio: 16 / 10;
+  }
+}

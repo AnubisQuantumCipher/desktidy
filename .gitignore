@@ -11,3 +11,5 @@ desktidy-sort
 *.lock
 smart-triage-cache.json
 smart-triage.last
+.neon
+.vercel
