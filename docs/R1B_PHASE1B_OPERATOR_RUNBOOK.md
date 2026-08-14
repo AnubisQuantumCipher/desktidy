@@ -85,16 +85,18 @@ Default is read-only:
 DeskTidySacrificialProbe.app/Contents/MacOS/DeskTidySacrificialProbe --plan
 ```
 
-Mutation (Phase 1B only):
+Mutation (Phase 1B only; requires `--commit-mutation` after a sealed grant):
 
 ```text
 …/DeskTidySacrificialProbe --register --auth-file /path/to/auth.json
-…/DeskTidySacrificialProbe --unregister --auth-file /path/to/unreg.json
+…/DeskTidySacrificialProbe --register --auth-file /path/to/auth.json --commit-mutation
+…/DeskTidySacrificialProbe --unregister --auth-file /path/to/unreg.json --commit-mutation
 ```
 
-Phase 1A's probe **refuses to invoke** the production mutator even if the
-interlock would permit (exit 4). Phase 1B replaces that stop with the single
-granted adapter call.
+Without `--commit-mutation` the probe still prints `GRANT_PREPARED` and
+`STOP_BEFORE_PRODUCTION_ADAPTER` (exit 4). Hosted CI and the public-boundary
+suite must not pass that flag with a valid authorization. Separate register
+and unregister authorization files/nonces are required.
 
 ## Exact readbacks after a real grant
 

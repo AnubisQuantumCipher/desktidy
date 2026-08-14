@@ -2,9 +2,10 @@ import Foundation
 import ServiceManagement
 
 // Production adapter. Construction has no side effect.
-// register/unregister exist so Phase 1B can call them *only* after the
-// MutationInterlock grants. Phase 1A never executes those methods.
-final class ProductionSMAdapter: ServiceManagementAdapting {
+// Ungranted overloads stay disconnected. The only ServiceManagement
+// register/unregister call sites are executeSealed*, reachable solely
+// through SacrificialMutationDispatcher.
+final class ProductionSMAdapter: ServiceManagementAdapting, SealedAdapterExecuting {
     init() {
         ProductionMutationLedger.constructions += 1
     }
@@ -25,21 +26,39 @@ final class ProductionSMAdapter: ServiceManagementAdapting {
 
     func requestRegister(plistName: String) -> Result<Void, SMAdapterError> {
         ProductionMutationLedger.registerInvocations += 1
-        return .failure(.failedClosed("Phase 1A.1 sealed: production mutation is not connected"))
-    }
-
-    func requestRegister(plistName: String, grant: PreparedMutationGrant) -> Result<Void, SMAdapterError> {
-        _ = grant
-        return requestRegister(plistName: plistName)
+        return .failure(.failedClosed("ungranted production mutation is not connected"))
     }
 
     func requestUnregister(plistName: String) -> Result<Void, SMAdapterError> {
         ProductionMutationLedger.unregisterInvocations += 1
-        return .failure(.failedClosed("Phase 1A.1 sealed: production mutation is not connected"))
+        return .failure(.failedClosed("ungranted production mutation is not connected"))
     }
 
-    func requestUnregister(plistName: String, grant: PreparedMutationGrant) -> Result<Void, SMAdapterError> {
-        _ = grant
-        return requestUnregister(plistName: plistName)
+    func executeSealedRegister(plistName: String) -> Result<Void, SMAdapterError> {
+        ProductionMutationLedger.registerInvocations += 1
+        if #available(macOS 13.0, *) {
+            let service = SMAppService.agent(plistName: plistName)
+            do {
+                try service.register()
+                return .success(())
+            } catch {
+                return .failure(.failedClosed("SMAppService.register: \(error)"))
+            }
+        }
+        return .failure(.unavailable)
+    }
+
+    func executeSealedUnregister(plistName: String) -> Result<Void, SMAdapterError> {
+        ProductionMutationLedger.unregisterInvocations += 1
+        if #available(macOS 13.0, *) {
+            let service = SMAppService.agent(plistName: plistName)
+            do {
+                try service.unregister()
+                return .success(())
+            } catch {
+                return .failure(.failedClosed("SMAppService.unregister: \(error)"))
+            }
+        }
+        return .failure(.unavailable)
     }
 }

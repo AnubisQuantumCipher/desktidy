@@ -80,8 +80,34 @@ enum DurableNonceStore {
         let line = "\(rec.nonce) \(rec.operation) \(rec.executableSHA256) \(rec.sourceCommit) \(rec.authorizationDigest) \(rec.reservedAt)\n"
         let bytes = Array(line.utf8)
         let written = bytes.withUnsafeBufferPointer { write(fd, $0.baseAddress, $0.count) }
+        fsync(fd)
         close(fd)
         if written != bytes.count { return .refused("nonce record write failed") }
         return .reserved(rec)
+    }
+
+    static func lookup(canonicalSacrificial: String, nonce: String) -> NonceReservation? {
+        guard let safe = normalize(nonce) else { return nil }
+        let dest = supportRoot(canonicalSacrificial: canonicalSacrificial)
+            .appendingPathComponent("nonces", isDirectory: true)
+            .appendingPathComponent(safe)
+        var lst = stat()
+        if lstat(dest.path, &lst) != 0 { return nil }
+        if (lst.st_mode & S_IFMT) == S_IFLNK { return nil }
+        guard let data = try? Data(contentsOf: URL(fileURLWithPath: dest.path)) else { return nil }
+        let parts = String(decoding: data, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: " ")
+            .map(String.init)
+        guard parts.count >= 6 else { return nil }
+        return NonceReservation(
+            nonce: parts[0],
+            operation: parts[1],
+            executableSHA256: parts[2],
+            sourceCommit: parts[3],
+            rootCanonical: canonicalSacrificial,
+            authorizationDigest: parts[4],
+            reservedAt: parts[5]
+        )
     }
 }
