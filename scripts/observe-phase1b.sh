@@ -3,6 +3,9 @@
 # Print-only launchctl. Never bootstrap/bootout/kickstart/enable/disable.
 # Never touches the live Desktop or com.sicarii.desktop-autosort*.
 set -euo pipefail
+# The sole architect-authorized lifecycle is recorded at cbfb795; replay is forbidden.
+echo "observe-phase1b: retired after recorded lifecycle; no replay is authorized" >&2
+exit 2
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 if [ -n "$(git -C "$ROOT" status --porcelain)" ]; then
   echo "observe-phase1b: refusing dirty worktree" >&2
