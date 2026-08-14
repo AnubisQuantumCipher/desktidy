@@ -43,6 +43,7 @@ struct Receipt: Codable {
     var outcome: String        // prepared | moved | failed | recovered | indeterminate
     var failureCode: String?
     var undoEligible: Bool
+    var reversesReceiptID: String? = nil
     var prevDigest: String
     var digest: String
 
@@ -348,6 +349,97 @@ final class MovementService {
         }
         log("\(planned.lastPathComponent) -> \(category.folderName)/")
         return receipt
+    }
+
+    /// Reverse one eligible movement through this same durable mover.  The
+    /// original source was a direct root child, so an undo destination is also
+    /// confined to a direct root child; the moved source must be exactly one
+    /// category level below that root.  No caller can supply arbitrary paths.
+    @discardableResult
+    func undo(receipt original: Receipt) -> Receipt? {
+        guard original.rootCanonical == rootCanonical.path,
+              original.undoEligible,
+              original.outcome == "moved" || original.outcome == "recovered",
+              let finalRel = original.finalDestRel,
+              let source = undoSource(for: finalRel),
+              let destinationName = directRootName(from: original.sourceRel) else {
+            return nil
+        }
+        let destination = uniqueDestination(in: root, for: destinationName)
+        let modification = (try? source.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? Date()
+        var receipt = skeleton(source: source, planned: destination,
+                               ruleID: "undo:\(original.id)",
+                               settleMTime: modification, settleAge: 0)
+        receipt.reversesReceiptID = original.id
+        receipt.outcome = "prepared"
+        do {
+            try ledger.writePending(receipt)
+        } catch {
+            log("ERROR: cannot persist undo intent for \(source.lastPathComponent) — refusing to move")
+            return nil
+        }
+
+        testHookAfterPrepare?(receipt)
+        var planned = destination
+        if fm.fileExists(atPath: planned.path) {
+            planned = uniqueDestination(in: root, for: destinationName)
+            receipt.plannedDestRel = relative(planned)
+            receipt.collision = true
+        }
+        do {
+            try fm.moveItem(at: source, to: planned)
+        } catch {
+            receipt.outcome = "failed"
+            receipt.failureCode = "undo_move_syscall_failed"
+            receipt.completedAt = ledger.now()
+            finalizeCompletion(&receipt)
+            log("ERROR: could not undo \(source.lastPathComponent): \(error.localizedDescription)")
+            return receipt
+        }
+
+        receipt.outcome = "moved"
+        receipt.finalDestRel = relative(planned)
+        receipt.collision = receipt.collision ?? (planned.lastPathComponent != destinationName)
+        receipt.undoEligible = false
+        receipt.completedAt = ledger.now()
+        do {
+            try ledger.append(receipt)
+            ledger.removePending(id: receipt.id)
+        } catch {
+            log("ERROR: undo moved \(source.lastPathComponent) but completion receipt could not be written — will reconcile on next start")
+            return receipt
+        }
+        log("\(source.lastPathComponent) -> watched root (undo)")
+        return receipt
+    }
+
+    private func undoSource(for relativePath: String) -> URL? {
+        let components = relativePath.split(separator: "/", omittingEmptySubsequences: false)
+        guard components.count == 2,
+              components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+            return nil
+        }
+        let directory = root.appendingPathComponent(String(components[0]), isDirectory: true)
+        let source = directory.appendingPathComponent(String(components[1]))
+        guard AuthorityGuard.canonicalize(directory.deletingLastPathComponent().path) == rootCanonical,
+              fm.fileExists(atPath: source.path),
+              let directoryValues = try? directory.resourceValues(forKeys: [.isSymbolicLinkKey]),
+              directoryValues.isSymbolicLink != true,
+              let sourceValues = try? source.resourceValues(forKeys: [.isSymbolicLinkKey]),
+              sourceValues.isSymbolicLink != true else {
+            return nil
+        }
+        return source
+    }
+
+    private func directRootName(from relativePath: String) -> String? {
+        guard !relativePath.isEmpty,
+              !relativePath.contains("/"),
+              relativePath != ".",
+              relativePath != ".." else {
+            return nil
+        }
+        return relativePath
     }
 
     private func skeleton(source: URL, planned: URL, ruleID: String,
