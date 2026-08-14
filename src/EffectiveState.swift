@@ -45,6 +45,10 @@ struct EffectiveStateReport: Codable {
     var watchedTarget: String
     var watchedTargetCanonical: String?
     var targetExists: Bool
+    var targetSource: String               // nativeConfig | installedPlist | environment | defaultDesktop
+    var targetResolution: String           // resolved | invalid
+    var appDirectory: String
+    var ledgerPath: String
     var productAgentLoaded: Bool
     var productAgentState: String          // running | loadedIdle | notLoaded | stale | uninspectable
     var effectiveMoverLabel: String?       // provable mover of this root, if any
@@ -62,46 +66,52 @@ enum EffectiveState {
     /// The single derivation. `now` is injectable for deterministic tests.
     static func compute() -> EffectiveStateReport {
         let fm = FileManager.default
-        let env = ProcessInfo.processInfo.environment
-        let home = fm.homeDirectoryForCurrentUser
 
-        // --- watched target: installed plist env > DESKTIDY_TARGET_DIR > default
-        let agentsDir: URL = {
-            if let d = env["DESKTIDY_AGENTS_DIR"], !d.isEmpty {
-                return URL(fileURLWithPath: (d as NSString).expandingTildeInPath, isDirectory: true)
-            }
-            return home.appendingPathComponent("Library/LaunchAgents", isDirectory: true)
-        }()
-        var target: String
-        var targetSource: String
-        if let fromPlist = installedTarget(agentsDir: agentsDir) {
-            target = fromPlist; targetSource = "installed plist"
-        } else if let t = env["DESKTIDY_TARGET_DIR"], !t.isEmpty {
-            target = (t as NSString).expandingTildeInPath; targetSource = "environment"
-        } else {
-            target = home.appendingPathComponent(Config.targetDirName).path; targetSource = "default"
+        // --- watched target: one resolver shared with the movement engine
+        let resolution = TargetResolver.resolve()
+        let target: String
+        let targetSource: String
+        let targetExists: Bool
+        let canonical: String?
+        let invalidReason: String?
+        switch resolution {
+        case .resolved(let path, let source, let exists):
+            target = path
+            targetSource = source.rawValue
+            targetExists = exists
+            canonical = exists ? AuthorityGuard.canonicalize(path).path : nil
+            invalidReason = nil
+        case .invalid(let reason, let source, let attempted):
+            target = attempted ?? ""
+            targetSource = source.rawValue
+            targetExists = false
+            canonical = nil
+            invalidReason = reason
         }
-        var isDir: ObjCBool = false
-        let targetExists = fm.fileExists(atPath: target, isDirectory: &isDir) && isDir.boolValue
-        let canonical = targetExists ? AuthorityGuard.canonicalize(target).path : nil
 
-        // --- authority (the R0 guard, unmodified)
+        // --- authority (the R0 guard, unmodified). Invalid target selection
+        // never falls back to a live default root for the probe.
         let guardian = AuthorityGuard()
-        let decision = guardian.evaluate(rootPath: target)
+        let decision: AuthorityDecision
+        if let invalidReason {
+            decision = .ambiguous(reason: invalidReason, records: [])
+        } else {
+            decision = guardian.evaluate(rootPath: target)
+        }
 
         // --- product agent state (same probe mechanism, self labels)
-        let (records, _) = guardian.relevantMovers(for: AuthorityGuard.canonicalize(target))
-        let selfRecord = records.first { $0.isSelf && $0.label == "com.desktidy.sort" }
+        let selfRecord: MoverRecord?
+        if invalidReason == nil {
+            let (records, _) = guardian.relevantMovers(for: AuthorityGuard.canonicalize(target))
+            selfRecord = records.first { $0.isSelf && $0.label == ProductIdentity.sortLabel }
+        } else {
+            selfRecord = nil
+        }
         let productState = selfRecord?.state ?? .notLoaded
         let productLoaded = productState == .running || productState == .loadedIdle
 
         // --- ledger health
-        let appDir: URL = {
-            if let a = env["DESKTIDY_APP_DIR"], !a.isEmpty {
-                return URL(fileURLWithPath: (a as NSString).expandingTildeInPath, isDirectory: true)
-            }
-            return home.appendingPathComponent("Library/Application Support/DeskTidy", isDirectory: true)
-        }()
+        let appDir = DeskTidyPaths.appDirectory()
         let ledger = ReceiptLedger(appDirectory: appDir)
         let ledgerHealth: LedgerHealth
         if !fm.fileExists(atPath: ledger.ledgerURL.path) {
@@ -123,7 +133,7 @@ enum EffectiveState {
                 moverLabel = live.label; moverProgram = live.programPath
             }
         case .sole, .soleWithStale:
-            if productLoaded { moverLabel = "com.desktidy.sort"; moverProgram = selfRecord?.programPath }
+            if productLoaded { moverLabel = ProductIdentity.sortLabel; moverProgram = selfRecord?.programPath }
         case .ambiguous:
             break   // unprovable — leave nil rather than guess
         }
@@ -132,7 +142,11 @@ enum EffectiveState {
         var overall: OverallState
         var reason: String
         var ambiguity: String?
-        if !targetExists {
+        if let invalidReason {
+            overall = .ambiguous
+            reason = "target resolution failed (\(targetSource): \(invalidReason))"
+            ambiguity = invalidReason
+        } else if !targetExists {
             overall = .ambiguous
             reason = "watched target does not exist (\(targetSource): \(target))"
             ambiguity = reason
@@ -180,6 +194,10 @@ enum EffectiveState {
             watchedTarget: target,
             watchedTargetCanonical: canonical,
             targetExists: targetExists,
+            targetSource: targetSource,
+            targetResolution: invalidReason == nil ? "resolved" : "invalid",
+            appDirectory: appDir.path,
+            ledgerPath: ledger.ledgerURL.path,
             productAgentLoaded: productLoaded,
             productAgentState: productState.rawValue,
             effectiveMoverLabel: moverLabel,
@@ -191,17 +209,6 @@ enum EffectiveState {
             suggestionsPresent: suggestions,
             moverVersion: DeskTidyVersion.string
         )
-    }
-
-    /// Watched target recorded in the installed product plist, if any.
-    private static func installedTarget(agentsDir: URL) -> String? {
-        let plist = agentsDir.appendingPathComponent("com.desktidy.sort.plist")
-        guard let data = FileManager.default.contents(atPath: plist.path),
-              let obj = try? PropertyListSerialization.propertyList(from: data, format: nil),
-              let dict = obj as? [String: Any],
-              let envDict = dict["EnvironmentVariables"] as? [String: String],
-              let t = envDict["DESKTIDY_TARGET_DIR"], !t.isEmpty else { return nil }
-        return t
     }
 
     // ------------------------------------------------------------------ UI mapping
@@ -238,7 +245,7 @@ enum EffectiveState {
         """
         DeskTidy effective state (\(r.generatedAt))
         overall: \(r.overall.rawValue) — \(r.overallReason)
-        target: \(r.watchedTarget) (exists: \(r.targetExists))
+        target: \(r.watchedTarget) (exists: \(r.targetExists), source: \(r.targetSource), resolution: \(r.targetResolution))
         product agent: \(r.productAgentState)
         effective mover: \(r.effectiveMoverLabel ?? "unprovable")\(r.effectiveMoverProgram.map { " (\($0))" } ?? "")
         foreign movers: \(r.foreignMovers.isEmpty ? "none" : r.foreignMovers.joined(separator: ", "))

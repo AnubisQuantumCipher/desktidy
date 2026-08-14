@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased (branch r1b/phase0-unified-truth — stacked on R1A, non-final)
+
+- **R1B Phase 0 (no live service migration):** one target resolver, one
+  app-support/receipt path helper, public `desktidy status` consumes
+  `--effective-state`, requested-but-invalid launchd fixtures fail closed,
+  product identity is centralized without widening the accepted self set.
+  Native `config.json` is a reader/model only — nothing writes it yet.
+  Schema-1 native config is parsed from raw UTF-8 with a strict object
+  parser; duplicate keys (including escaped-equivalent spellings) fail
+  closed and do not fall through.
+
 ## Unreleased (branch r1a/public-trust-surface)
 
 - **Experimental menu-bar app (read-only trust surface):** build from source

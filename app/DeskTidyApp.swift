@@ -149,25 +149,14 @@ struct ContentView: View {
         NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: path)])
     }
 
-    private func receiptsDir() -> URL {
-        let env = ProcessInfo.processInfo.environment
-        let base: URL
-        if let a = env["DESKTIDY_APP_DIR"], !a.isEmpty {
-            base = URL(fileURLWithPath: (a as NSString).expandingTildeInPath, isDirectory: true)
-        } else {
-            base = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support/DeskTidy", isDirectory: true)
-        }
-        return base.appendingPathComponent("receipts", isDirectory: true)
-    }
+    private func receiptsDir() -> URL { DeskTidyPaths.receiptsDirectory() }
 
     private func receiptsExist() -> Bool {
-        FileManager.default.fileExists(atPath: receiptsDir().appendingPathComponent("ledger.jsonl").path)
+        FileManager.default.fileExists(atPath: DeskTidyPaths.ledgerURL().path)
     }
 
     private func revealReceipts() {
-        NSWorkspace.shared.activateFileViewerSelecting(
-            [receiptsDir().appendingPathComponent("ledger.jsonl")])
+        NSWorkspace.shared.activateFileViewerSelecting([DeskTidyPaths.ledgerURL()])
     }
 
     private func copyDiagnostic() {

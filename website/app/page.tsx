@@ -369,13 +369,15 @@ export default function Home() {
               </h2>
               <p className="lede mt-5">
                 DeskTidy is MIT-licensed and public on GitHub — every guarantee on this page is a
-                claim you can check against ~700 lines of Swift. The command-line version you can
-                install today stays free.
+                claim you can check against the source. The command-line version you can
+                install today stays free. The Homebrew formula remains v1.1.2 and does not
+                include the experimental R1A/R1B app work.
               </p>
               <p className="lede mt-4">
-                Next up: a native menu-bar app — pause and resume from the menu bar, a live activity
-                feed, one-click undo, and visual rules — as a one-time-purchase, no-subscription
-                product. It&rsquo;s in development, not for sale yet. Want in when it&rsquo;s ready?
+                A read-only experimental menu-bar status surface exists in source only — not
+                packaged, not in Homebrew. Next up for a real app release: pause and resume,
+                a live activity feed, one-click undo, and visual rules — as a one-time-purchase,
+                no-subscription product. Undo is planned, not shipped. Want in when it&rsquo;s ready?
               </p>
               <div className="mt-8">
                 <WaitlistForm />

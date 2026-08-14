@@ -133,38 +133,21 @@ cmd_teardown() {
 cmd_status() {
   need_components
   say "DeskTidy status"
-  "$SORT_BIN" --health | sed 's/^/  /'
-  echo
-  local target_now
-  target_now="$(/usr/libexec/PlistBuddy -c 'Print :EnvironmentVariables:DESKTIDY_TARGET_DIR' "$LA/com.desktidy.sort.plist" 2>/dev/null || echo "$HOME/Desktop")"
-  DESKTIDY_TARGET_DIR="$target_now" "$SORT_BIN" --authority-diagnose | sed 's/^/  /'
+  "$SORT_BIN" --effective-state --json | /usr/bin/python3 -c '
+import json, sys
+r = json.load(sys.stdin)
+print("  overall: %s" % r.get("overall"))
+print("  reason: %s" % r.get("overallReason"))
+print("  target: %s" % r.get("watchedTarget"))
+print("  target_exists: %s" % r.get("targetExists"))
+print("  target_source: %s" % r.get("targetSource"))
+print("  product_agent: %s" % r.get("productAgentState"))
+print("  effective_mover: %s" % (r.get("effectiveMoverLabel") or "unprovable"))
+print("  ledger: %s" % r.get("ledger"))
+' || die "effective-state failed"
   echo
   say "Recent movement receipts"
   "$SORT_BIN" --history 5 | sed 's/^/  /'
-  echo
-  local lbl st
-  for lbl in com.desktidy.sort com.desktidy.notify; do
-    if launchctl print "gui/$UID_NUM/$lbl" >/dev/null 2>&1; then
-      st="loaded"
-    else
-      st="NOT loaded (run: desktidy setup)"
-    fi
-    printf '  agent %-22s %s\n' "$lbl" "$st"
-  done
-  echo
-  local target
-  target="$(/usr/libexec/PlistBuddy -c 'Print :EnvironmentVariables:DESKTIDY_TARGET_DIR' "$LA/com.desktidy.sort.plist" 2>/dev/null || echo "$HOME/Desktop")"
-  if DESKTIDY_TARGET_DIR="$target" "$SORT_BIN" --check-access >/dev/null 2>&1; then
-    ok "Full Disk Access: granted (target: $target)"
-  else
-    warn "Full Disk Access: NOT granted — DeskTidy cannot sort until you allow it."
-    echo "    System Settings → Privacy & Security → Full Disk Access → + → $SELF_DIR → desktidy-sort"
-  fi
-  echo
-  if [ -f "$APPDIR/desktidy.log" ]; then
-    say "Recent moves"
-    tail -5 "$APPDIR/desktidy.log" | sed 's/^/  /'
-  fi
 }
 
 cmd_sort_now() { need_components; exec "$SORT_BIN" --smart-now --verbose; }

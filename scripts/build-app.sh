@@ -19,6 +19,10 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 xcrun swiftc -O -parse-as-library \
   -target "arm64-apple-macosx$MACOS_MIN" \
   "$REPO/src/Config.swift" \
+  "$REPO/src/Paths.swift" \
+  "$REPO/src/TargetResolver.swift" \
+  "$REPO/src/NativeConfigParser.swift" \
+  "$REPO/src/ProductIdentity.swift" \
   "$REPO/src/Authority.swift" \
   "$REPO/src/Receipts.swift" \
   "$REPO/src/EffectiveState.swift" \
@@ -46,6 +50,5 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-codesign -s - -i com.desktidy.app --force "$APP" >/dev/null 2>&1 || true
+codesign -s - -i com.desktidy.app --force "$APP"
 echo "built: $APP"
-"$APP/Contents/MacOS/DeskTidy" --smoke 2>/dev/null || true

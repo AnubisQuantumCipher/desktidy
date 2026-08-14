@@ -27,7 +27,7 @@ jobs:
         run: |
           mkdir -p build
           xcrun swiftc -O -parse-as-library src/*.swift -o build/desktidy-sort
-          codesign -s - -i com.desktidy.sort build/desktidy-sort || true
+          codesign -s - -i com.desktidy.sort build/desktidy-sort
 
       - name: Self-test (deterministic safety checks)
         run: ./build/desktidy-sort --self-test
@@ -76,10 +76,11 @@ jobs:
       - name: R1A effective-state gates (matrix, parity, fail-closed UI, read-only)
         run: ./build/desktidy-sort --state-test
 
-      - name: R1A app build + headless smokes (no GUI session needed)
+      - name: R1A app build + hermetic fixture smokes
         run: |
+          chmod +x scripts/smoke-app.sh scripts/test-smoke-isolation.sh scripts/test-cli-status.sh
+          ./scripts/test-smoke-isolation.sh
           ./scripts/build-app.sh build
-          # conflict fixture: the app binary must fail closed, never claim running
           AG=$(mktemp -d); TG=$(mktemp -d); AP=$(mktemp -d)
           PROG=$(mktemp -d)/mover; printf '#!/bin/sh\n' > "$PROG"
           /usr/bin/python3 - "$AG" "$TG" "$PROG" <<'PYEOF2'
@@ -90,12 +91,17 @@ jobs:
           with open(os.path.join(ag, 'state.json'), 'w') as f:
               json.dump({'com.example.fixture-mover': 'running'}, f)
           PYEOF2
-          OUT=$(DESKTIDY_AGENTS_DIR="$AG" DESKTIDY_TARGET_DIR="$TG" DESKTIDY_APP_DIR="$AP"                 DESKTIDY_LAUNCHD_STATE_FILE="$AG/state.json"                 ./build/DeskTidy.app/Contents/MacOS/DeskTidy --smoke | tail -1)
-          echo "$OUT"; test "$OUT" = "SMOKE overall=foreignConflict"
-          # clean fixture: pausedNotLoaded
+          DESKTIDY_AGENTS_DIR="$AG" DESKTIDY_TARGET_DIR="$TG" DESKTIDY_APP_DIR="$AP" \
+            DESKTIDY_LAUNCHD_STATE_FILE="$AG/state.json" EXPECTED_OVERALL=foreignConflict \
+            ./scripts/smoke-app.sh ./build/DeskTidy.app/Contents/MacOS/DeskTidy
           AG2=$(mktemp -d); TG2=$(mktemp -d); AP2=$(mktemp -d)
-          OUT2=$(DESKTIDY_AGENTS_DIR="$AG2" DESKTIDY_TARGET_DIR="$TG2" DESKTIDY_APP_DIR="$AP2"                  ./build/DeskTidy.app/Contents/MacOS/DeskTidy --smoke | tail -1)
-          echo "$OUT2"; test "$OUT2" = "SMOKE overall=pausedNotLoaded"
+          printf '%s\n' '{}' > "$AG2/state.json"
+          DESKTIDY_AGENTS_DIR="$AG2" DESKTIDY_TARGET_DIR="$TG2" DESKTIDY_APP_DIR="$AP2" \
+            DESKTIDY_LAUNCHD_STATE_FILE="$AG2/state.json" EXPECTED_OVERALL=pausedNotLoaded \
+            ./scripts/smoke-app.sh ./build/DeskTidy.app/Contents/MacOS/DeskTidy
+
+      - name: Public CLI status consumes shared effective-state
+        run: ./scripts/test-cli-status.sh ./build/desktidy-sort
 
       - name: R1A read-only confinement grep (app sources contain no mutation calls)
         run: |

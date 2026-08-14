@@ -12,7 +12,7 @@ const QA: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: "Does it upload my files anywhere?",
-    a: "No. There isn't a single network call in the source code — no telemetry, no analytics, no update checks. The code is ~700 lines of Swift; you can verify this yourself on GitHub.",
+    a: "No. There isn't a single network call in the source code — no telemetry, no analytics, no update checks. The implementation is a small, readable Swift tree on GitHub.",
   },
   {
     q: "Why does it need Full Disk Access?",
@@ -64,11 +64,11 @@ const QA: { q: string; a: React.ReactNode }[] = [
   },
   {
     q: "Is it open source?",
-    a: "Yes — MIT licensed, on GitHub. The sorter is ~700 lines of readable Swift with a public security policy and CI that tests the safety guarantees on every commit.",
+    a: "Yes — MIT licensed, on GitHub. The sorter is a small readable Swift tree with a public security policy and CI that tests the safety guarantees on every commit.",
   },
   {
     q: "Is there a native menu-bar app?",
-    a: "Not yet — today DeskTidy is a command-line install with a background service. A native menu-bar app (pause/resume, activity feed, rules, undo) is planned; join early access above to hear when it ships.",
+    a: "An experimental read-only menu-bar status surface exists in source (R1A/R1B branches) and is not shipped, packaged, or included in the Homebrew v1.1.2 formula. Pause/resume, activity feed, and undo are still planned — join early access above to hear when a real app release ships.",
   },
 ];
 

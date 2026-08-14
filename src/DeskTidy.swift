@@ -60,6 +60,8 @@ final class DeskTidy {
     let smartCompiledIn = false
     #endif
 
+    let targetResolution: TargetResolution
+
     lazy var ledger = ReceiptLedger(appDirectory: appDirectory)
     lazy var movement = MovementService(root: target, ledger: ledger,
                                         moverVersion: DeskTidyVersion.string,
@@ -69,18 +71,16 @@ final class DeskTidy {
     var reservedRootNames: Set<String> { Set(Category.allCases.map { $0.folderName }) }
 
     init() {
-        let env = ProcessInfo.processInfo.environment
         home = fm.homeDirectoryForCurrentUser
-
-        if let t = env["DESKTIDY_TARGET_DIR"], !t.isEmpty {
-            target = URL(fileURLWithPath: (t as NSString).expandingTildeInPath, isDirectory: true)
-        } else {
-            target = home.appendingPathComponent(Config.targetDirName, isDirectory: true)
-        }
-        if let a = env["DESKTIDY_APP_DIR"], !a.isEmpty {
-            appDirectory = URL(fileURLWithPath: (a as NSString).expandingTildeInPath, isDirectory: true)
-        } else {
-            appDirectory = home.appendingPathComponent("Library/Application Support/DeskTidy", isDirectory: true)
+        appDirectory = DeskTidyPaths.appDirectory()
+        targetResolution = TargetResolver.resolve()
+        switch targetResolution {
+        case .resolved(let path, _, _):
+            target = URL(fileURLWithPath: path, isDirectory: true)
+        case .invalid:
+            // Not a movement target. run() refuses before any access/sweep.
+            // Keep the URL off ~/Desktop so a forgotten check cannot sort live.
+            target = appDirectory.appendingPathComponent(".unresolved-target", isDirectory: true)
         }
         inbox = target.appendingPathComponent(Config.folderInbox, isDirectory: true)
         logURL = appDirectory.appendingPathComponent("desktidy.log")
@@ -138,6 +138,11 @@ final class DeskTidy {
             #endif
             print("Smart triage is not built into this copy (needs macOS 26+ at build time).")
             return 0
+        }
+
+        if case .invalid(let reason, let source, _) = targetResolution {
+            fputs("DeskTidy: target resolution failed (\(source.rawValue): \(reason)) — refusing movement\n", stderr)
+            return 3
         }
 
         guard acquireLock() else { return 0 }   // another instance is already running
