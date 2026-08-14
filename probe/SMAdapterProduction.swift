@@ -25,21 +25,59 @@ final class ProductionSMAdapter: ServiceManagementAdapting {
 
     func requestRegister(plistName: String) -> Result<Void, SMAdapterError> {
         ProductionMutationLedger.registerInvocations += 1
-        return .failure(.failedClosed("Phase 1A.1 sealed: production mutation is not connected"))
+        return .failure(.failedClosed("ungranted production mutation is not connected"))
     }
 
     func requestRegister(plistName: String, grant: PreparedMutationGrant) -> Result<Void, SMAdapterError> {
-        _ = grant
-        return requestRegister(plistName: plistName)
+        switch GrantedMutation.accept(grant: grant, requested: .register, plistName: plistName) {
+        case .refuse(let r):
+            return .failure(.failedClosed(r))
+        case .accept:
+            return invokeGrantedRegister(plistName: plistName)
+        }
     }
 
     func requestUnregister(plistName: String) -> Result<Void, SMAdapterError> {
         ProductionMutationLedger.unregisterInvocations += 1
-        return .failure(.failedClosed("Phase 1A.1 sealed: production mutation is not connected"))
+        return .failure(.failedClosed("ungranted production mutation is not connected"))
     }
 
     func requestUnregister(plistName: String, grant: PreparedMutationGrant) -> Result<Void, SMAdapterError> {
-        _ = grant
-        return requestUnregister(plistName: plistName)
+        switch GrantedMutation.accept(grant: grant, requested: .unregister, plistName: plistName) {
+        case .refuse(let r):
+            return .failure(.failedClosed(r))
+        case .accept:
+            return invokeGrantedUnregister(plistName: plistName)
+        }
+    }
+
+    /// Only the grant-accepting overloads may call this.
+    private func invokeGrantedRegister(plistName: String) -> Result<Void, SMAdapterError> {
+        ProductionMutationLedger.registerInvocations += 1
+        if #available(macOS 13.0, *) {
+            let service = SMAppService.agent(plistName: plistName)
+            do {
+                try service.register()
+                return .success(())
+            } catch {
+                return .failure(.failedClosed("SMAppService.register: \(error)"))
+            }
+        }
+        return .failure(.unavailable)
+    }
+
+    /// Only the grant-accepting overloads may call this.
+    private func invokeGrantedUnregister(plistName: String) -> Result<Void, SMAdapterError> {
+        ProductionMutationLedger.unregisterInvocations += 1
+        if #available(macOS 13.0, *) {
+            let service = SMAppService.agent(plistName: plistName)
+            do {
+                try service.unregister()
+                return .success(())
+            } catch {
+                return .failure(.failedClosed("SMAppService.unregister: \(error)"))
+            }
+        }
+        return .failure(.unavailable)
     }
 }

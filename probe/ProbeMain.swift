@@ -76,10 +76,40 @@ struct SacrificialProbe {
                         print("sourceCommit=\(grant.sourceCommit)")
                         print("root=\(grant.rootCanonical)")
                         print("nonce=\(grant.nonce)")
-                        print("STOP_BEFORE_PRODUCTION_ADAPTER")
+                        if !args.contains("--commit-mutation") {
+                            print("STOP_BEFORE_PRODUCTION_ADAPTER")
+                            print("ledger_constructions=\(ProductionMutationLedger.constructions)")
+                            print("ledger_registers=\(ProductionMutationLedger.registerInvocations)")
+                            exit(4)
+                        }
+                        let adapter = ProductionSMAdapter()
+                        let plist = SacrificialIdentity.hypothesizedPlistName
+                        let mutation: Result<Void, SMAdapterError>
+                        if registering {
+                            mutation = adapter.requestRegister(plistName: plist, grant: grant)
+                        } else {
+                            mutation = adapter.requestUnregister(plistName: plist, grant: grant)
+                        }
+                        let st = adapter.status(plistName: plist)
+                        print("MUTATION_ATTEMPTED")
+                        switch mutation {
+                        case .success:
+                            print("adapter_result=success")
+                        case .failure(let e):
+                            print("adapter_result=failedClosed")
+                            print("adapter_error=\(e)")
+                        }
+                        switch st {
+                        case .success(let s): print("status=\(s)")
+                        case .failure(let e): print("status_error=\(e)")
+                        }
                         print("ledger_constructions=\(ProductionMutationLedger.constructions)")
                         print("ledger_registers=\(ProductionMutationLedger.registerInvocations)")
-                        exit(4)
+                        print("ledger_unregisters=\(ProductionMutationLedger.unregisterInvocations)")
+                        switch mutation {
+                        case .success: exit(0)
+                        case .failure: exit(5)
+                        }
                     }
                 }
             }
@@ -89,10 +119,10 @@ struct SacrificialProbe {
     static func planText() -> String {
         """
         DeskTidy sacrificial SMAppService probe (NON-PRODUCTION)
-        Phase 1A.1 seals measurement and grant preparation only.
-        Default: read-only plan. No registration in Phase 1A.1.
-        A future Phase 1B requires a reviewed patch connecting the sealed
-        grant to exactly one adapter call, plus separate architect authorization.
+        Default: measure, prepare grant, STOP (exit 4). No adapter construction.
+        Phase 1B observation requires --commit-mutation after a sealed grant.
+        Hosted CI and the public-boundary suite must not pass that flag
+        with a valid authorization.
         Hypothesized plist name: \(SacrificialIdentity.hypothesizedPlistName)
         Hypothesized label: \(SacrificialIdentity.hypothesizedLabel) (UNOBSERVED)
         Bundle id: \(SacrificialIdentity.bundleID)

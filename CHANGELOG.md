@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased (branch r1b/phase1b-sacrificial-observation — stacked on Phase 1A.1, non-final)
+
+- **R1B Phase 1B (sacrificial observation path):** the sealed
+  `PreparedMutationGrant` may be connected to exactly one
+  `SMAppService.register` / `.unregister` call, and only after
+  `--commit-mutation`. The default public probe path still exits 4 with a
+  zero ledger. Ungranted overloads stay disconnected. Hosted CI does not
+  run the observation. Production self-labels are unchanged. Ad-hoc
+  signing remains development evidence only.
+- **Local sacrificial observation (2026-08-14, commit `4725c51`):**
+  register returned `success` / `status=enabled`; `launchctl print`
+  showed `com.desktidy.sacrificial` submitted by ServiceManagement
+  (`parent bundle identifier=com.desktidy.sacrificial-probe`, helper
+  not running). Unregister returned `notRegistered` and print rc 113.
+  Personal movers stayed loaded. Transcript:
+  `docs/evidence/R1B_PHASE1B_SACRIFICIAL_OBSERVATION.md`. Login Items
+  string, FDA/TCC, and reboot/login were not observed.
+
 ## Unreleased (branch r1b/phase1a-smappservice-harness — stacked on Phase 0, non-final)
 
 - **R1B Phase 1A.1 (measured evidence seal, still no live mutation):** the
