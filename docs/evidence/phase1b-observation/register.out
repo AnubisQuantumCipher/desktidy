@@ -1,0 +1,14 @@
+GRANT_PREPARED
+operation=register
+executableSHA256=2f621c2f9979d33782aa89fabd1d4e9abbdf99a19afa1e46e6d86aa2fbb285f6
+sourceCommit=673f49182dad83fd3dc81513927edc2057620abc
+root=/private/tmp/desktidy-phase1b-root-dv5FP4
+nonce=nonce-r2-reg1
+transactionID=06f88019b9a2038879aa4aae912d13359a289eedac7d4e9a30a45f0b7799eb9f
+MUTATION_ATTEMPTED
+dispatch_result=invoked
+status=enabled
+ledger_constructions=1
+ledger_registers=1
+ledger_unregisters=0
+register_exit=0
