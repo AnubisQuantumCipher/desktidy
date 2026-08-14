@@ -21,6 +21,17 @@ fail_if "$ROOT/src/Phase1A1Tests.swift" 'ProductionSMAdapter|SMAppService' \
 fail_if "$ROOT/src/Phase1BTests.swift" 'ProductionSMAdapter|SMAppService' \
   "phase1b tests mention production ServiceManagement mutator"
 
+fail_if "$ROOT/src/Phase2Tests.swift" 'ProductionSMAdapter|SMAppService' \
+  "phase2 tests mention production ServiceManagement mutator"
+
+fail_if "$ROOT/src/RecoverableMigration.swift" 'ProductionSMAdapter|SMAppService' \
+  "recoverable migration is not fake-only"
+
+if ! grep -q 'let service: FakeSMAdapter' "$ROOT/src/RecoverableMigration.swift"; then
+  echo "FAIL: recoverable migration lost concrete fake-only service binding" >&2
+  exit 1
+fi
+
 # Default path must still stop. The --commit-mutation branch is Phase 1B only.
 if ! grep -q 'STOP_BEFORE_PRODUCTION_ADAPTER' "$ROOT/probe/ProbeMain.swift"; then
   echo "FAIL: probe lost the default stop-before-adapter boundary" >&2
