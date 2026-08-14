@@ -351,6 +351,21 @@ final class MovementService {
         return receipt
     }
 
+    /// Checks whether the receipt still has a confined, live undo source.
+    /// This has no movement side effect and is used when rendering an Undo
+    /// action for an asynchronous notification.
+    func canUndo(receipt original: Receipt) -> Bool {
+        guard original.rootCanonical == rootCanonical.path,
+              original.undoEligible,
+              original.outcome == "moved" || original.outcome == "recovered",
+              let finalRel = original.finalDestRel,
+              undoSource(for: finalRel) != nil,
+              directRootName(from: original.sourceRel) != nil else {
+            return false
+        }
+        return true
+    }
+
     /// Reverse one eligible movement through this same durable mover.  The
     /// original source was a direct root child, so an undo destination is also
     /// confined to a direct root child; the moved source must be exactly one

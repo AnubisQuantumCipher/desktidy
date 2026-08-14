@@ -28,6 +28,7 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/Receipts.swift" \
   "$REPO/src/EffectiveState.swift" \
   "$REPO/src/CanonicalApplicationCore.swift" \
+  "$REPO/src/ReceiptNotifications.swift" \
   "$REPO/app/DeskTidyApp.swift" \
   -o "$APP/Contents/MacOS/DeskTidy"
 

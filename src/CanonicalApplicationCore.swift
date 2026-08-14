@@ -172,6 +172,7 @@ final class CanonicalApplicationCore {
     private let lifecycleStatusProvider: () -> CanonicalLifecycleStatus
     private let authorize: (CanonicalCoreAuthorizationRequest) -> CanonicalCoreAuthorization
     private let emit: (CanonicalCoreEvent) -> Void
+    private let movementCompleted: (Receipt) -> Void
     private let fm: FileManager
     private let pauseURL: URL
     private let commandReceipts: CanonicalCommandReceiptLedger
@@ -313,6 +314,7 @@ final class CanonicalApplicationCore {
         lifecycleStatus: @escaping () -> CanonicalLifecycleStatus,
         authorize: @escaping (CanonicalCoreAuthorizationRequest) -> CanonicalCoreAuthorization,
         emit: @escaping (CanonicalCoreEvent) -> Void = { _ in },
+        movementCompleted: @escaping (Receipt) -> Void = { _ in },
         fm: FileManager = .default,
         configurationStore: NativeConfigurationStore? = nil,
         dateNow: @escaping () -> Date = { Date() },
@@ -327,6 +329,7 @@ final class CanonicalApplicationCore {
         self.lifecycleStatusProvider = lifecycleStatus
         self.authorize = authorize
         self.emit = emit
+        self.movementCompleted = movementCompleted
         self.fm = fm
         self.configurationStore = configurationStore ?? NativeConfigurationStore(url: nativeConfigURL, fm: fm)
         self.pauseURL = nativeConfigURL.deletingLastPathComponent().appendingPathComponent("pause-state.json")
@@ -360,7 +363,8 @@ final class CanonicalApplicationCore {
             moverVersion: DeskTidyVersion.string,
             log: log
         )
-        return CanonicalApplicationCore(
+        let notificationBridge = ProductionReceiptNotificationBridge(receiptsDirectory: movement.ledger.receiptsDir)
+        let core = CanonicalApplicationCore(
             movement: movement,
             nativeConfigURL: DeskTidyPaths.nativeConfigURL(),
             targetResolver: { TargetResolver.resolve() },
@@ -390,8 +394,11 @@ final class CanonicalApplicationCore {
                 }
                 return .allowed
             },
-            emit: emit
+            emit: emit,
+            movementCompleted: { receipt in notificationBridge.receive(receipt) }
         )
+        notificationBridge.bind(core: core)
+        return core
     }
     private static func currentBootSessionID() -> String {
         var bootTime = timeval()
@@ -447,6 +454,33 @@ final class CanonicalApplicationCore {
     }
 
     func commandHistory() -> [CanonicalCommandReceipt] { commandReceipts.readAll() }
+
+    /// Notification presentation reads this immediately before delivery so an
+    /// Undo button is omitted when a later receipt or filesystem change made
+    /// the original movement stale.
+    func isUndoEligible(receiptID: String) -> Bool {
+        let receipts = history().receipts
+        guard let original = receipts.last(where: { $0.id == receiptID }) else { return false }
+        return isUndoEligible(original, in: receipts)
+    }
+
+    /// Reveal is resolved from the receipt through the canonical root, not from
+    /// untrusted notification content. The caller owns Finder presentation.
+    func revealDestination(receiptID: String) -> URL? {
+        guard let receipt = history().receipts.last(where: { $0.id == receiptID }),
+              receipt.outcome == "moved" || receipt.outcome == "recovered" else {
+            return nil
+        }
+        let relative = receipt.finalDestRel ?? receipt.plannedDestRel
+        let components = relative.split(separator: "/", omittingEmptySubsequences: false)
+        guard !components.isEmpty,
+              components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+            return nil
+        }
+        let destination = movement.root.appendingPathComponent(relative)
+        guard fm.fileExists(atPath: destination.path) else { return nil }
+        return destination
+    }
 
     func whereDidItGo(named name: String) -> CanonicalWhereDidItGo? {
         guard !name.isEmpty else { return nil }
@@ -581,12 +615,7 @@ final class CanonicalApplicationCore {
         case .success(let target):
             let receipts = history().receipts
             guard let original = receipts.last(where: { $0.id == receiptID }),
-                  original.undoEligible,
-                  (original.outcome == "moved" || original.outcome == "recovered"),
-                  !receipts.contains(where: {
-                      $0.reversesReceiptID == receiptID
-                          && ($0.outcome == "moved" || $0.outcome == "recovered")
-                  }) else {
+                  isUndoEligible(original, in: receipts) else {
                 return refused(command: .undo, reason: .invalidReceipt(receiptID))
             }
             var moved: Receipt?
@@ -603,6 +632,9 @@ final class CanonicalApplicationCore {
                 emit(CanonicalCoreEvent(kind: .movementCompleted, command: .undo,
                                         receiptID: moved.id,
                                         message: "undo completed for \(original.sourceRel)"))
+                if history().receipts.contains(where: { $0.id == moved.id && ($0.outcome == "moved" || $0.outcome == "recovered") }) {
+                    movementCompleted(moved)
+                }
             }
             return result
         }
@@ -817,6 +849,9 @@ final class CanonicalApplicationCore {
                 emit(CanonicalCoreEvent(kind: .movementCompleted, command: .tidyNow,
                                         receiptID: receipt.id,
                                         message: "moved \(receipt.sourceRel) to \(receipt.finalDestRel ?? receipt.plannedDestRel)"))
+                if history().receipts.contains(where: { $0.id == receipt.id && ($0.outcome == "moved" || $0.outcome == "recovered") }) {
+                    movementCompleted(receipt)
+                }
             } else {
                 failed.append(receipt)
             }
@@ -846,6 +881,16 @@ final class CanonicalApplicationCore {
 
     private func now() -> String { iso.string(from: Date()) }
 
+    private func isUndoEligible(_ original: Receipt, in receipts: [Receipt]) -> Bool {
+        guard !receipts.contains(where: {
+            $0.reversesReceiptID == original.id
+                && ($0.outcome == "moved" || $0.outcome == "recovered")
+        }) else {
+            return false
+        }
+        return movement.canUndo(receipt: original)
+    }
+
     private func refusalText(_ refusal: CanonicalCoreRefusal) -> String {
         switch refusal {
         case .invalidTargetConfiguration: return "target configuration is invalid"
@@ -869,6 +914,14 @@ struct CanonicalCoreCommandAdapter {
 
     init(core: CanonicalApplicationCore) {
         self.core = core
+    }
+
+    func undo(receiptID: String) -> CanonicalCommandResult {
+        core.undo(receiptID: receiptID)
+    }
+
+    func revealDestination(receiptID: String) -> URL? {
+        core.revealDestination(receiptID: receiptID)
     }
 
     func execute(_ command: CanonicalCoreCommand) -> CanonicalAdapterResult {
