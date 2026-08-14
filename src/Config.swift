@@ -59,3 +59,24 @@ enum Config {
     static let enableSmartTriage = true
     static let smartIntervalSeconds: TimeInterval = 300
 }
+
+// Where a file belongs. Folder names come from Config above (user-editable).
+// Lives here (not in the engine file) so lightweight targets — the CLI and the
+// R1A menu-bar app — share one definition without importing the engine's @main.
+enum Category: CaseIterable {
+    case inbox, documents, images, screenshots, videos, audio, archives, code, folders
+
+    var folderName: String {
+        switch self {
+        case .inbox:       return Config.folderInbox
+        case .documents:   return Config.folderDocuments
+        case .images:      return Config.folderImages
+        case .screenshots: return Config.folderScreenshots
+        case .videos:      return Config.folderVideos
+        case .audio:       return Config.folderAudio
+        case .archives:    return Config.folderArchives
+        case .code:        return Config.folderCode
+        case .folders:     return Config.folderFolders
+        }
+    }
+}

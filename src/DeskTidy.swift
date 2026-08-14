@@ -20,25 +20,6 @@ import PDFKit
 //    • every move is logged; nothing is hidden
 // ============================================================================
 
-// Where a file belongs. Folder names come from Config (user-editable).
-enum Category: CaseIterable {
-    case inbox, documents, images, screenshots, videos, audio, archives, code, folders
-
-    var folderName: String {
-        switch self {
-        case .inbox:       return Config.folderInbox
-        case .documents:   return Config.folderDocuments
-        case .images:      return Config.folderImages
-        case .screenshots: return Config.folderScreenshots
-        case .videos:      return Config.folderVideos
-        case .audio:       return Config.folderAudio
-        case .archives:    return Config.folderArchives
-        case .code:        return Config.folderCode
-        case .folders:     return Config.folderFolders
-        }
-    }
-}
-
 // Plain records used by the optional AI pass (safe to keep unconditionally).
 struct CachedDecision: Codable, Equatable {
     let fingerprint: String
@@ -125,6 +106,19 @@ final class DeskTidy {
         }
         if arguments.contains("--authority-diagnose") || arguments.contains("--authority-check") {
             return AuthorityGuard().diagnose(rootPath: target.path, json: arguments.contains("--json"))
+        }
+        if arguments.contains("--effective-state") {
+            let report = EffectiveState.compute()
+            if arguments.contains("--json") {
+                let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+                if let d = try? enc.encode(report) { print(String(decoding: d, as: UTF8.self)) }
+            } else {
+                print(EffectiveState.diagnostic(report))
+            }
+            return 0
+        }
+        if arguments.contains("--state-test") {
+            return R1ATests(binaryPath: CommandLine.arguments[0]).runAll() ? 0 : 1
         }
         if arguments.contains("--history") {
             return printHistory(arguments: arguments)
