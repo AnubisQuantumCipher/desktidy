@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased (branch r1b/phase1a-smappservice-harness — stacked on Phase 0, non-final)
+
+- **R1B Phase 1A (fake-substrate only):** sacrificial SMAppService harness —
+  migration state machine, injectable fake adapter, multi-factor mutation
+  interlock, simulated transaction/rollback matrix, non-production probe
+  bundle (ad-hoc, development evidence). No real `SMAppService.register`
+  or `.unregister` execution. Apple public distribution membership
+  unresolved. Phase 1B observation is separately authorized.
+
 ## Unreleased (branch r1b/phase0-unified-truth — stacked on R1A, non-final)
 
 - **R1B Phase 0 (no live service migration):** one target resolver, one
