@@ -103,6 +103,21 @@ jobs:
       - name: Public CLI status consumes shared effective-state
         run: ./scripts/test-cli-status.sh ./build/desktidy-sort
 
+      - name: R1B Phase 1A fake-substrate harness
+        run: |
+          chmod +x scripts/build-probe.sh scripts/test-phase1a-wiring.sh
+          ./scripts/test-phase1a-wiring.sh
+          ./build/desktidy-sort --phase1a-test
+          ./build/desktidy-sort --phase1a1-test
+          chmod +x scripts/test-phase1a1-public-boundary.sh
+          ./scripts/test-phase1a1-public-boundary.sh
+          ./scripts/build-probe.sh build
+          test -x ./build/DeskTidySacrificialProbe.app/Contents/MacOS/DeskTidySacrificialProbe
+          test -x ./build/DeskTidySacrificialProbe.app/Contents/MacOS/SacrificialHelper
+          test -f ./build/DeskTidySacrificialProbe.app/Contents/Library/LaunchAgents/com.desktidy.sacrificial.plist
+          codesign -dv ./build/DeskTidySacrificialProbe.app
+          ./build/DeskTidySacrificialProbe.app/Contents/MacOS/DeskTidySacrificialProbe --plan | grep -q 'read-only\|NON-PRODUCTION\|UNOBSERVED'
+
       - name: R1A read-only confinement grep (app sources contain no mutation calls)
         run: |
           for f in app/DeskTidyApp.swift src/EffectiveState.swift; do
