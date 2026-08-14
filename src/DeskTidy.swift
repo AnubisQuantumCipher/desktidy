@@ -155,6 +155,27 @@ final class DeskTidy {
         if arguments.contains("--phasek-test") {
             return PhaseKTests().runAll() ? 0 : 1
         }
+        if arguments.contains("--phasel-test") {
+            return PhaseLTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasel-campaign") {
+            guard let outputFlag = arguments.firstIndex(of: "--phase-l-output"),
+                  outputFlag + 1 < arguments.count else {
+                fputs("DeskTidy: --phasel-campaign requires --phase-l-output /private/tmp/<name>.jsonl\n", stderr)
+                return 2
+            }
+            do {
+                let result = try PhaseLCampaign(
+                    outputURL: URL(fileURLWithPath: arguments[outputFlag + 1])
+                ).run()
+                print("PHASE L CAMPAIGN: \(result.passedCases) passed, \(result.failedCases) failed, \(result.timedOutCases) timed out, \(result.totalCases) total")
+                return result.totalCases == PhaseLCampaignConfiguration.expectedCaseCount
+                    && result.failedCases == 0 && result.timedOutCases == 0 ? 0 : 1
+            } catch {
+                fputs("DeskTidy: Phase L campaign failed: \(error.localizedDescription)\n", stderr)
+                return 1
+            }
+        }
         if arguments.contains("--history") {
             return printHistory(arguments: arguments)
         }
