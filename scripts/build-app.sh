@@ -4,9 +4,8 @@
 #
 #   scripts/build-app.sh [output-dir]     # default: build/
 #
-# The app compiles the SHARED state sources (Config, Authority, Receipts,
-# EffectiveState) plus app/DeskTidyApp.swift — the same truth the CLI prints
-# via `desktidy-sort --effective-state`.
+# The app links the canonical product API and its shared state dependencies.
+# DeskTidy.swift is deliberately excluded: it is the CLI executable entrypoint.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,6 +25,7 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/Authority.swift" \
   "$REPO/src/Receipts.swift" \
   "$REPO/src/EffectiveState.swift" \
+  "$REPO/src/CanonicalApplicationCore.swift" \
   "$REPO/app/DeskTidyApp.swift" \
   -o "$APP/Contents/MacOS/DeskTidy"
 

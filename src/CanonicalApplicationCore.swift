@@ -246,6 +246,10 @@ final class CanonicalApplicationCore {
         return NativeConfigParser.parse(data)
     }
 
+    func receiptsDirectory() -> URL { movement.ledger.receiptsDir }
+
+    func diagnostic() -> String { EffectiveState.diagnostic(effectiveState().effective) }
+
     func installationStatus() -> CanonicalLifecycleStatus { lifecycleStatusProvider() }
 
     func history() -> CanonicalMovementHistory {

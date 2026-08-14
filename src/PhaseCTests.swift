@@ -176,9 +176,11 @@ final class PhaseCTests {
         let moved = adapter.execute(.tidyNow)
         check(
             "C05",
-            "core owns effective-state reads, typed lifecycle status, and the future-intent adapter path",
+            "core owns effective-state, diagnostics, receipt-location reads, typed lifecycle status, and the future-intent adapter path",
             status == .fixture("hermetic")
                 && state.effective.targetResolution == "resolved"
+                && f.core.receiptsDirectory() == f.app.appendingPathComponent("receipts", isDirectory: true)
+                && f.core.diagnostic().contains("DeskTidy effective state")
                 && moved.tidyNow?.moved.count == 1
                 && !fm.fileExists(atPath: source.path)
         )
