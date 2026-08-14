@@ -144,6 +144,9 @@ final class DeskTidy {
         if arguments.contains("--phasef-test") {
             return PhaseFTests().runAll() ? 0 : 1
         }
+        if arguments.contains("--phaseg-test") {
+            return PhaseGTests().runAll() ? 0 : 1
+        }
         if arguments.contains("--history") {
             return printHistory(arguments: arguments)
         }

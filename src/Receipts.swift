@@ -1,4 +1,5 @@
 import CryptoKit
+import Darwin
 import Foundation
 
 // ============================================================================
@@ -24,6 +25,53 @@ import Foundation
 //  the watched root, rule IDs, timestamps, sizes/mtimes, and outcome only.
 // ============================================================================
 
+/// Bounded, durable evidence used to prove that an Undo source is the exact
+/// artifact which the original receipt moved. Regular-file bytes are hashed
+/// only when the complete file is within the fixed limit; larger or
+/// non-regular artifacts are deliberately not undo-eligible.
+struct FileArtifactIdentity: Codable, Equatable {
+    static let maximumDigestBytes: Int64 = 4 * 1024 * 1024
+
+    let device: UInt64
+    let inode: UInt64
+    let fileType: UInt32
+    let size: Int64
+    let modificationSeconds: Int64
+    let modificationNanoseconds: Int64
+    let contentDigest: String?
+
+    var isUndoVerifiable: Bool { contentDigest != nil }
+
+    static func capture(at url: URL) -> FileArtifactIdentity? {
+        var metadata = stat()
+        guard Darwin.lstat(url.path, &metadata) == 0 else { return nil }
+
+        let mode = UInt32(metadata.st_mode)
+        let type = mode & UInt32(S_IFMT)
+        guard type != UInt32(S_IFLNK) else { return nil }
+
+        let size = Int64(metadata.st_size)
+        let digest: String?
+        if type == UInt32(S_IFREG), size >= 0, size <= maximumDigestBytes,
+           let data = try? Data(contentsOf: url, options: [.mappedIfSafe]) {
+            let hash = SHA256.hash(data: data)
+            digest = hash.map { String(format: "%02x", $0) }.joined()
+        } else {
+            digest = nil
+        }
+
+        return FileArtifactIdentity(
+            device: UInt64(metadata.st_dev),
+            inode: UInt64(metadata.st_ino),
+            fileType: type,
+            size: size,
+            modificationSeconds: Int64(metadata.st_mtimespec.tv_sec),
+            modificationNanoseconds: Int64(metadata.st_mtimespec.tv_nsec),
+            contentDigest: digest
+        )
+    }
+}
+
 struct Receipt: Codable {
     var schema: Int = 1
     var id: String
@@ -44,6 +92,7 @@ struct Receipt: Codable {
     var failureCode: String?
     var undoEligible: Bool
     var reversesReceiptID: String? = nil
+    var artifactIdentity: FileArtifactIdentity? = nil
     var prevDigest: String
     var digest: String
 
@@ -69,11 +118,15 @@ final class ReceiptLedger {
     let pendingDir: URL
     let ledgerURL: URL
     private let fm = FileManager.default
+    private let appendLock = NSLock()
     private let iso: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
+
+    /// Test-only post-move durability interruption. Production never assigns it.
+    var testHookBeforeAppend: ((Receipt) throws -> Void)?
 
     init(appDirectory: URL) {
         receiptsDir = appDirectory.appendingPathComponent("receipts", isDirectory: true)
@@ -131,6 +184,10 @@ final class ReceiptLedger {
     /// Append a completed receipt to the ledger with fsync. Throws on failure —
     /// callers must NOT report success if this throws.
     func append(_ receipt: Receipt) throws {
+        appendLock.lock()
+        defer { appendLock.unlock() }
+
+        try testHookBeforeAppend?(receipt)
         try ensureDirectories()
         var r = receipt
         r.prevDigest = lastDigest()
@@ -323,7 +380,7 @@ final class MovementService {
             receipt.collision = true
         }
         do {
-            try fm.moveItem(at: source, to: planned)
+            try moveWithoutOverwrite(source: source, to: planned)
         } catch {
             receipt.outcome = "failed"
             receipt.failureCode = "move_syscall_failed"
@@ -338,7 +395,7 @@ final class MovementService {
         receipt.outcome = "moved"
         receipt.finalDestRel = relative(planned)
         receipt.collision = receipt.collision ?? (planned.lastPathComponent != source.lastPathComponent)
-        receipt.undoEligible = true
+        receipt.undoEligible = receipt.artifactIdentity?.isUndoVerifiable == true
         receipt.completedAt = ledger.now()
         do {
             try ledger.append(receipt)
@@ -351,110 +408,157 @@ final class MovementService {
         return receipt
     }
 
-    /// Checks whether the receipt still has a confined, live undo source.
-    /// This has no movement side effect and is used when rendering an Undo
-    /// action for an asynchronous notification.
+    /// Checks whether the receipt still names the exact confined artifact and
+    /// its original root slot remains vacant. This has no movement side effect.
     func canUndo(receipt original: Receipt) -> Bool {
-        guard original.rootCanonical == rootCanonical.path,
-              original.undoEligible,
-              original.outcome == "moved" || original.outcome == "recovered",
-              let finalRel = original.finalDestRel,
-              undoSource(for: finalRel) != nil,
-              directRootName(from: original.sourceRel) != nil else {
-            return false
-        }
-        return true
+        validatedUndoPaths(for: original) != nil
     }
 
-    /// Reverse one eligible movement through this same durable mover.  The
-    /// original source was a direct root child, so an undo destination is also
-    /// confined to a direct root child; the moved source must be exactly one
-    /// category level below that root.  No caller can supply arbitrary paths.
+    /// Reverse one eligible movement through this same durable mover. Undo is
+    /// intentionally an exact restoration, not a collision-renaming move:
+    /// when the original root slot is occupied, it refuses without moving.
     @discardableResult
     func undo(receipt original: Receipt) -> Receipt? {
-        guard original.rootCanonical == rootCanonical.path,
-              original.undoEligible,
-              original.outcome == "moved" || original.outcome == "recovered",
-              let finalRel = original.finalDestRel,
-              let source = undoSource(for: finalRel),
-              let destinationName = directRootName(from: original.sourceRel) else {
-            return nil
-        }
-        let destination = uniqueDestination(in: root, for: destinationName)
-        let modification = (try? source.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate ?? Date()
-        var receipt = skeleton(source: source, planned: destination,
+        guard let initial = validatedUndoPaths(for: original) else { return nil }
+
+        let modification = (try? initial.source.resourceValues(forKeys: [.contentModificationDateKey]))?
+            .contentModificationDate ?? Date()
+        var receipt = skeleton(source: initial.source, planned: initial.destination,
                                ruleID: "undo:\(original.id)",
                                settleMTime: modification, settleAge: 0)
         receipt.reversesReceiptID = original.id
         receipt.outcome = "prepared"
+        receipt.undoEligible = false
         do {
             try ledger.writePending(receipt)
         } catch {
-            log("ERROR: cannot persist undo intent for \(source.lastPathComponent) — refusing to move")
+            log("ERROR: cannot persist undo intent for \(initial.source.lastPathComponent) — refusing to move")
             return nil
         }
 
         testHookAfterPrepare?(receipt)
-        var planned = destination
-        if fm.fileExists(atPath: planned.path) {
-            planned = uniqueDestination(in: root, for: destinationName)
-            receipt.plannedDestRel = relative(planned)
-            receipt.collision = true
+
+        // Revalidate after durable prepare. A manual create/replace between
+        // presentation and syscall must never cause an overwrite or reversal
+        // of an intervening artifact.
+        guard let live = validatedUndoPaths(for: original) else {
+            receipt.outcome = "failed"
+            receipt.failureCode = "undo_precondition_changed"
+            receipt.completedAt = ledger.now()
+            finalizeCompletion(&receipt)
+            return receipt
         }
         do {
-            try fm.moveItem(at: source, to: planned)
+            try moveWithoutOverwrite(source: live.source, to: live.destination)
         } catch {
             receipt.outcome = "failed"
             receipt.failureCode = "undo_move_syscall_failed"
             receipt.completedAt = ledger.now()
             finalizeCompletion(&receipt)
-            log("ERROR: could not undo \(source.lastPathComponent): \(error.localizedDescription)")
+            log("ERROR: could not undo \(live.source.lastPathComponent): \(error.localizedDescription)")
             return receipt
         }
 
         receipt.outcome = "moved"
-        receipt.finalDestRel = relative(planned)
-        receipt.collision = receipt.collision ?? (planned.lastPathComponent != destinationName)
-        receipt.undoEligible = false
+        receipt.finalDestRel = relative(live.destination)
         receipt.completedAt = ledger.now()
         do {
             try ledger.append(receipt)
             ledger.removePending(id: receipt.id)
         } catch {
-            log("ERROR: undo moved \(source.lastPathComponent) but completion receipt could not be written — will reconcile on next start")
-            return receipt
+            // The file did move, but without a durable completion record it is
+            // not a successful command. The pending intent is restart evidence.
+            log("ERROR: undo moved \(live.source.lastPathComponent) but completion receipt could not be written — will reconcile on next start")
+            return nil
         }
-        log("\(source.lastPathComponent) -> watched root (undo)")
+        log("\(live.source.lastPathComponent) -> watched root (undo)")
         return receipt
     }
 
-    private func undoSource(for relativePath: String) -> URL? {
-        let components = relativePath.split(separator: "/", omittingEmptySubsequences: false)
-        guard components.count == 2,
-              components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+    private func validatedUndoPaths(for original: Receipt) -> (source: URL, destination: URL)? {
+        guard original.rootCanonical == rootCanonical.path,
+              original.undoEligible,
+              original.outcome == "moved" || original.outcome == "recovered",
+              let finalRel = original.finalDestRel,
+              let identity = original.artifactIdentity,
+              identity.isUndoVerifiable,
+              let source = undoSource(for: finalRel),
+              let destinationName = directRootName(from: original.sourceRel) else {
             return nil
         }
-        let directory = root.appendingPathComponent(String(components[0]), isDirectory: true)
-        let source = directory.appendingPathComponent(String(components[1]))
-        guard AuthorityGuard.canonicalize(directory.deletingLastPathComponent().path) == rootCanonical,
-              fm.fileExists(atPath: source.path),
-              let directoryValues = try? directory.resourceValues(forKeys: [.isSymbolicLinkKey]),
-              directoryValues.isSymbolicLink != true,
-              let sourceValues = try? source.resourceValues(forKeys: [.isSymbolicLinkKey]),
-              sourceValues.isSymbolicLink != true else {
+        let destination = root.appendingPathComponent(destinationName)
+        guard !fm.fileExists(atPath: destination.path),
+              FileArtifactIdentity.capture(at: source) == identity else {
+            return nil
+        }
+        return (source, destination)
+    }
+
+    private func directRootName(from relativePath: String) -> String? {
+        let components = relativePath.split(separator: "/", omittingEmptySubsequences: false)
+        guard components.count == 1,
+              let name = components.first,
+              !name.isEmpty,
+              name != ".",
+              name != ".." else {
+            return nil
+        }
+        return String(name)
+    }
+
+    private func moveWithoutOverwrite(source: URL, to destination: URL) throws {
+        guard Darwin.renamex_np(source.path, destination.path, UInt32(RENAME_EXCL)) == 0 else {
+            throw NSError(domain: NSPOSIXErrorDomain, code: Int(errno))
+        }
+    }
+
+    private func undoSource(for relativePath: String) -> URL? {
+        guard let source = confinedPath(for: relativePath, directRootChild: false),
+              fm.fileExists(atPath: source.path) else {
             return nil
         }
         return source
     }
 
-    private func directRootName(from relativePath: String) -> String? {
-        guard !relativePath.isEmpty,
-              !relativePath.contains("/"),
-              relativePath != ".",
-              relativePath != ".." else {
+    private func reconciliationPaths(for receipt: Receipt) -> (source: URL, destination: URL)? {
+        guard receipt.outcome == "prepared",
+              receipt.rootCanonical == rootCanonical.path else {
             return nil
         }
-        return relativePath
+        let undo = receipt.reversesReceiptID != nil
+        guard let source = confinedPath(for: receipt.sourceRel, directRootChild: !undo),
+              let destination = confinedPath(for: receipt.plannedDestRel, directRootChild: undo) else {
+            return nil
+        }
+        return (source, destination)
+    }
+
+    private func confinedPath(for relativePath: String, directRootChild: Bool) -> URL? {
+        let components = relativePath.split(separator: "/", omittingEmptySubsequences: false)
+        let expectedComponentCount = directRootChild ? 1 : 2
+        guard components.count == expectedComponentCount,
+              components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+            return nil
+        }
+
+        let path = root.appendingPathComponent(relativePath)
+        let parent = path.deletingLastPathComponent()
+        if directRootChild {
+            guard AuthorityGuard.canonicalize(parent.path) == rootCanonical else { return nil }
+        } else {
+            guard AuthorityGuard.canonicalize(parent.deletingLastPathComponent().path) == rootCanonical,
+                  !isSymbolicLink(parent) else {
+                return nil
+            }
+        }
+        guard !isSymbolicLink(path) else { return nil }
+        return path
+    }
+
+    private func isSymbolicLink(_ url: URL) -> Bool {
+        var metadata = stat()
+        return Darwin.lstat(url.path, &metadata) == 0
+            && (UInt32(metadata.st_mode) & UInt32(S_IFMT)) == UInt32(S_IFLNK)
     }
 
     private func skeleton(source: URL, planned: URL, ruleID: String,
@@ -477,6 +581,7 @@ final class MovementService {
             outcome: "prepared",
             failureCode: nil,
             undoEligible: false,
+            artifactIdentity: FileArtifactIdentity.capture(at: source),
             prevDigest: "",
             digest: ""
         )
@@ -534,20 +639,43 @@ final class MovementService {
                 handled += 1
                 continue
             }
-            let sourceURL = root.appendingPathComponent(r.sourceRel)
-            let destURL = root.appendingPathComponent(r.plannedDestRel)
-            let sourceExists = fmgr.fileExists(atPath: sourceURL.path)
-            let destExists = fmgr.fileExists(atPath: destURL.path)
+            guard let paths = reconciliationPaths(for: r) else {
+                r.outcome = "indeterminate"
+                r.failureCode = "pending_path_rejected"
+                r.completedAt = ledger.now()
+                do {
+                    try ledger.append(r)
+                    ledger.removePending(id: r.id)
+                    handled += 1
+                } catch {
+                    log("ERROR: could not reconcile pending intent \(r.id) — leaving for next start")
+                }
+                continue
+            }
+
+            let sourceExists = fmgr.fileExists(atPath: paths.source.path)
+            let destinationExists = fmgr.fileExists(atPath: paths.destination.path)
             r.completedAt = ledger.now()
-            switch (sourceExists, destExists) {
+            switch (sourceExists, destinationExists) {
             case (true, false):
-                r.outcome = "failed"; r.failureCode = "crash_before_move"
+                r.outcome = "failed"
+                r.failureCode = "crash_before_move"
             case (false, true):
-                r.outcome = "recovered"; r.finalDestRel = r.plannedDestRel; r.undoEligible = true
+                if let identity = FileArtifactIdentity.capture(at: paths.destination),
+                   identity == r.artifactIdentity {
+                    r.outcome = "recovered"
+                    r.finalDestRel = r.plannedDestRel
+                    r.undoEligible = r.reversesReceiptID == nil && identity.isUndoVerifiable
+                } else {
+                    r.outcome = "indeterminate"
+                    r.failureCode = "recovered_identity_mismatch"
+                }
             case (true, true):
-                r.outcome = "failed"; r.failureCode = "crash_before_move_dest_occupied"
+                r.outcome = "failed"
+                r.failureCode = "crash_before_move_dest_occupied"
             case (false, false):
-                r.outcome = "indeterminate"; r.failureCode = "state_unprovable"
+                r.outcome = "indeterminate"
+                r.failureCode = "state_unprovable"
             }
             do {
                 try ledger.append(r)

@@ -182,6 +182,7 @@ final class CanonicalApplicationCore {
     private let bootSessionID: () -> String
     private let beforeMove: () -> Void
     private let tidyLock = NSLock()
+    private let undoLock = NSLock()
     private let pauseStateLock = NSLock()
 
     private enum CommandExecutionFailure: Error {
@@ -609,10 +610,16 @@ final class CanonicalApplicationCore {
     }
 
     func undo(receiptID: String) -> CanonicalCommandResult {
+        undoLock.lock()
+        defer { undoLock.unlock() }
+
         switch readyForMovement() {
         case .failure(let refusal):
             return refused(command: .undo, reason: refusal)
         case .success(let target):
+            guard movement.ledger.verifyChain() == nil else {
+                return refused(command: .undo, reason: .invalidReceipt(receiptID))
+            }
             let receipts = history().receipts
             guard let original = receipts.last(where: { $0.id == receiptID }),
                   isUndoEligible(original, in: receipts) else {
@@ -623,9 +630,18 @@ final class CanonicalApplicationCore {
                 self.pauseStateLock.lock()
                 defer { self.pauseStateLock.unlock() }
                 try self.requireMovementReadyWhileLocked(expectedTarget: target)
+                switch self.authorize(CanonicalCoreAuthorizationRequest(
+                    command: .undo, currentTarget: target, requestedTarget: nil
+                )) {
+                case .allowed:
+                    break
+                case .refused(let reason):
+                    throw CommandExecutionFailure.refusal(.unauthorized(reason))
+                }
+                try self.requireMovementReadyWhileLocked(expectedTarget: target)
                 moved = self.movement.undo(receipt: original)
                 guard moved?.outcome == "moved" else {
-                    throw CocoaError(.fileWriteUnknown)
+                    throw CommandExecutionFailure.refusal(.invalidReceipt(receiptID))
                 }
             }
             if result.outcome == .completed, let moved {
@@ -882,10 +898,11 @@ final class CanonicalApplicationCore {
     private func now() -> String { iso.string(from: Date()) }
 
     private func isUndoEligible(_ original: Receipt, in receipts: [Receipt]) -> Bool {
-        guard !receipts.contains(where: {
-            $0.reversesReceiptID == original.id
-                && ($0.outcome == "moved" || $0.outcome == "recovered")
-        }) else {
+        guard movement.ledger.verifyChain() == nil,
+              !receipts.contains(where: {
+                  $0.reversesReceiptID == original.id
+                      && ($0.outcome == "moved" || $0.outcome == "recovered")
+              }) else {
             return false
         }
         return movement.canUndo(receipt: original)
