@@ -83,4 +83,15 @@ enum MigrationPolicy {
             return .refuse
         }
     }
+
+    /// Production migration tests and code must not target the live Desktop.
+    /// Comparison is by canonical path equality against an injected desktop
+    /// or the process home Desktop when no fixture is supplied.
+    static func isLiveDesktopTarget(_ targetCanonical: String, desktop: String? = nil) -> Bool {
+        let desk = AuthorityGuard.canonicalize(desktop ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop").path)
+        let target = AuthorityGuard.canonicalize(targetCanonical)
+        if MutationInterlock.rootsEquivalent(target, desk) { return true }
+        if MutationInterlock.isInsideDesktop(target.path, desktop: desk) { return true }
+        return false
+    }
 }

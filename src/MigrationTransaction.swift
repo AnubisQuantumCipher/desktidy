@@ -66,6 +66,14 @@ struct MigrationOrchestrator {
             )
         }
 
+        if ServiceIdentityRegistry.isNeverTarget(plistName)
+            || plistName.contains("desktop-autosort")
+            || !ServiceIdentityRegistry.isKnownIdentity(plistName) {
+            return rec(.refused, before: "unprobed", after: "unprobed", rollback: false)
+        }
+        if MigrationPolicy.isLiveDesktopTarget(targetCanonical) {
+            return rec(.refused, before: "unprobed", after: "unprobed", rollback: false)
+        }
         let state = MigrationPolicy.classify(evidence)
         if MigrationPolicy.decide(state: state, intent: intent) == .refuse {
             return rec(.refused, before: "unprobed", after: "unprobed", rollback: false)

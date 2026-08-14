@@ -53,6 +53,7 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/Config.swift" \
   "$REPO/src/Paths.swift" \
   "$REPO/src/ProductIdentity.swift" \
+  "$REPO/src/ServiceIdentity.swift" \
   "$REPO/src/Authority.swift" \
   "$REPO/src/StrictJSONObject.swift" \
   "$REPO/src/SMAdapter.swift" \

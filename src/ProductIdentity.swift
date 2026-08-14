@@ -8,10 +8,12 @@ import Foundation
 // ============================================================================
 
 enum ProductIdentity {
-    static let sortLabel = "com.desktidy.sort"
-    static let notifyLabel = "com.desktidy.notify"
-    static let selfLabels: Set<String> = [sortLabel, notifyLabel]
-    static let expectedProgramBasenames: Set<String> = ["desktidy-sort", "desktidy-notify", "DeskTidy"]
+    static let sortLabel = ServiceIdentityRegistry.record(role: .sortCLI).label
+    static let notifyLabel = ServiceIdentityRegistry.record(role: .notifyCLI).label
+    static let selfLabels: Set<String> = ServiceIdentityRegistry.productionSelfLabels
+    static let expectedProgramBasenames: Set<String> = Set(
+        ServiceIdentityRegistry.records.filter { $0.acceptedSelf || $0.role == .menuBarApp }.map(\.expectedProgram)
+    )
 
     static func isSelf(label: String, programPath: String?, programExists: Bool) -> Bool {
         guard selfLabels.contains(label) else { return false }
