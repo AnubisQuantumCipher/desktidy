@@ -26,14 +26,10 @@ struct CachedDecision: Codable, Equatable {
     let destination: String
     let certainty: String
     let reason: String
+    // Absent in pre-Phase-K cache rows; read them conservatively as unavailable.
+    let provenance: SmartTriageSuggestionProvenance?
 }
 
-struct Suggestion: Equatable {
-    let name: String
-    let destination: String
-    let certainty: String
-    let reason: String
-}
 
 final class DeskTidy {
     let fm = FileManager.default
@@ -156,6 +152,9 @@ final class DeskTidy {
         if arguments.contains("--phasej-test") {
             return PhaseJTests().runAll() ? 0 : 1
         }
+        if arguments.contains("--phasek-test") {
+            return PhaseKTests().runAll() ? 0 : 1
+        }
         if arguments.contains("--history") {
             return printHistory(arguments: arguments)
         }
@@ -226,9 +225,17 @@ final class DeskTidy {
         let forceSmart = arguments.contains("--smart-now")
         #if canImport(FoundationModels)
         if #available(macOS 26, *), Config.enableSmartTriage {
-            if forceSmart || smartTriageIsDue() {
+            switch SmartTriageControl.runGate(
+                compiledIn: smartCompiledIn,
+                isDue: forceSmart || smartTriageIsDue(),
+                lowPowerMode: false,
+                backendAvailable: true
+            ) {
+            case .mayRequestBackend:
                 markSmartTriageAttempt()
                 await writeSmartSuggestions()
+            case .compiledOut, .rateLimited, .lowPowerDeferred, .backendUnavailable:
+                break
             }
         }
         #endif

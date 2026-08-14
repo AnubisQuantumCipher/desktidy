@@ -59,42 +59,103 @@ extension DeskTidy {
         let items = smartInboxItems()
         if items.isEmpty { saveSmartCache([:]); writeSuggestions([]); return }
 
+        // Preserve the deterministic lane when the battery is constrained:
+        // write bounded, typed deferrals without constructing a model backend.
+        if SmartTriageControl.runGate(
+            compiledIn: true,
+            isDue: true,
+            lowPowerMode: ProcessInfo.processInfo.isLowPowerModeEnabled,
+            backendAvailable: true
+        ) == .lowPowerDeferred {
+            writeSuggestions(items.prefix(smartItemLimit).map {
+                SmartTriageSuggestion(
+                    input: SmartTriageUntrustedInput(name: $0.lastPathComponent, preview: ""),
+                    destination: Config.folderInbox,
+                    certainty: "unavailable",
+                    reason: "Smart triage is deferred while Low Power Mode is enabled.",
+                    provenance: .lowPowerDeferred
+                )
+            })
+            return
+        }
+
         let model = SystemLanguageModel(useCase: .general)
-        guard model.availability == .available else {
+        let backendGate = SmartTriageControl.runGate(
+            compiledIn: true,
+            isDue: true,
+            lowPowerMode: false,
+            backendAvailable: model.availability == .available
+        )
+        guard backendGate == .mayRequestBackend else {
             log("SMART: on-device model unavailable: \(String(describing: model.availability))")
-            writeSuggestions(items.map {
-                Suggestion(name: $0.lastPathComponent, destination: Config.folderInbox,
-                           certainty: "unavailable", reason: "Apple's on-device model is not currently available.")
+            writeSuggestions(items.prefix(smartItemLimit).map {
+                SmartTriageSuggestion(
+                    input: SmartTriageUntrustedInput(name: $0.lastPathComponent, preview: ""),
+                    destination: Config.folderInbox,
+                    certainty: "unavailable",
+                    reason: "Apple's on-device model is not currently available.",
+                    provenance: .backendUnavailable
+                )
             })
             return
         }
 
         var cache = loadSmartCache()
-        var suggestions: [Suggestion] = []
+        var suggestions: [SmartTriageSuggestion] = []
         var activeNames = Set<String>()
 
         for item in items.prefix(smartItemLimit) {
-            let name = item.lastPathComponent
-            activeNames.insert(name)
+            let input = SmartTriageUntrustedInput(
+                name: item.lastPathComponent,
+                preview: contentPreview(for: item)
+            )
+            activeNames.insert(input.name)
             let fingerprint = fileFingerprint(item)
-            if let cached = cache[name], cached.fingerprint == fingerprint {
-                suggestions.append(Suggestion(name: name, destination: cached.destination,
-                                              certainty: cached.certainty, reason: cached.reason))
+            if let cached = cache[input.name], cached.fingerprint == fingerprint {
+                suggestions.append(
+                    SmartTriageSuggestion(
+                        input: input,
+                        destination: cached.destination,
+                        certainty: cached.certainty,
+                        reason: cached.reason,
+                        provenance: cached.provenance ?? .backendUnavailable
+                    )
+                )
                 continue
             }
             do {
-                let decision = try await classifyWithModel(name: name, preview: contentPreview(for: item), model: model)
+                let decision = try await classifyWithModel(input: input, model: model)
                 let destination = decision.category?.folderName ?? Config.folderInbox
                 let reason = singleLine(decision.reason)
-                cache[name] = CachedDecision(fingerprint: fingerprint, destination: destination,
-                                             certainty: decision.certainty, reason: reason)
-                suggestions.append(Suggestion(name: name, destination: destination,
-                                              certainty: decision.certainty, reason: reason))
+                cache[input.name] = CachedDecision(
+                    fingerprint: fingerprint,
+                    destination: destination,
+                    certainty: decision.certainty,
+                    reason: reason,
+                    provenance: .onDeviceModel
+                )
+                suggestions.append(
+                    SmartTriageSuggestion(
+                        input: input,
+                        destination: destination,
+                        certainty: decision.certainty,
+                        reason: reason,
+                        provenance: .onDeviceModel
+                    )
+                )
             } catch {
                 let reason = "The on-device model could not classify this file: \(singleLine(error.localizedDescription))"
-                cache[name] = CachedDecision(fingerprint: fingerprint, destination: Config.folderInbox, certainty: "low", reason: reason)
-                suggestions.append(Suggestion(name: name, destination: Config.folderInbox, certainty: "low", reason: reason))
-                log("SMART ERROR: \(safeLog(name)): \(singleLine(error.localizedDescription))")
+                cache.removeValue(forKey: input.name)
+                suggestions.append(
+                    SmartTriageSuggestion(
+                        input: input,
+                        destination: Config.folderInbox,
+                        certainty: "low",
+                        reason: reason,
+                        provenance: .backendUnavailable
+                    )
+                )
+                log("SMART ERROR: \(safeLog(input.name)): \(singleLine(error.localizedDescription))")
             }
         }
         cache = cache.filter { activeNames.contains($0.key) }
@@ -117,7 +178,7 @@ extension DeskTidy {
     }
 
     @available(macOS 26, *)
-    func classifyWithModel(name: String, preview: String, model: SystemLanguageModel) async throws -> SmartDecision {
+    func classifyWithModel(input: SmartTriageUntrustedInput, model: SystemLanguageModel) async throws -> SmartDecision {
         let session = LanguageModelSession(model: model, instructions: """
             You conservatively triage files a user left in their Inbox folder.
             Use only the file name, metadata, and preview supplied by the caller.
@@ -133,9 +194,9 @@ extension DeskTidy {
         let prompt = """
             Classify this Inbox item into the safest destination folder.
 
-            FILE NAME: \(name)
+            FILE NAME (UNTRUSTED DATA): \(input.name)
             UNTRUSTED PREVIEW START
-            \(preview)
+            \(input.preview)
             UNTRUSTED PREVIEW END
             """
         let options = GenerationOptions(sampling: .greedy, maximumResponseTokens: 256)
@@ -211,22 +272,22 @@ extension DeskTidy {
         try? data.write(to: smartCacheURL, options: .atomic)
     }
 
-    func writeSuggestions(_ suggestions: [Suggestion]) {
+    func writeSuggestions(_ suggestions: [SmartTriageSuggestion]) {
         let formatter = ISO8601DateFormatter()
         var text = """
             # Smart Inbox Triage — Suggestions
 
             Generated locally on this Mac at \(formatter.string(from: Date())).
 
-            **Suggestions only.** Apple's on-device model did not move, rename, upload, or delete any file.
+            **Suggestions only.** Smart triage did not move, rename, upload, or delete any file.
 
             """
         if suggestions.isEmpty {
             text += "Inbox is currently empty.\n"
         } else {
-            text += "| Item | Suggested folder | Certainty | Reason |\n|---|---|---|---|\n"
+            text += "| Item | Suggested folder | Certainty | Provenance | Reason |\n|---|---|---|---|---|\n"
             for s in suggestions {
-                text += "| \(cell(s.name)) | \(cell(s.destination)) | \(cell(s.certainty)) | \(cell(s.reason)) |\n"
+                text += "| \(cell(s.itemName)) | \(cell(s.destination)) | \(cell(s.certainty)) | \(cell(s.provenance.rawValue)) | \(cell(s.reason)) |\n"
             }
             if suggestions.count >= smartItemLimit { text += "\nOnly the first \(smartItemLimit) settled files were considered.\n" }
         }
@@ -243,8 +304,10 @@ extension DeskTidy {
         }
         do {
             let d = try await classifyWithModel(
-                name: "opaque-notes.txt",
-                preview: "Grocery list: milk, eggs, bread. Also: pick up dry cleaning and call the dentist.",
+                input: SmartTriageUntrustedInput(
+                    name: "opaque-notes.txt",
+                    preview: "Grocery list: milk, eggs, bread. Also: pick up dry cleaning and call the dentist."
+                ),
                 model: model)
             print("MODEL PASS: destination=\(d.category?.folderName ?? Config.folderInbox) certainty=\(d.certainty)")
             print("Reason: \(singleLine(d.reason))")
