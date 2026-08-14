@@ -117,6 +117,8 @@ final class NativeMenuModel: ObservableObject {
             return "the target is unavailable."
         case .paused:
             return "DeskTidy is paused."
+        case .invalidPauseDuration:
+            return "the requested pause duration is invalid."
         case .unauthorized(let reason):
             return reason
         case .invalidTarget(let path):
@@ -249,7 +251,7 @@ struct NativeMenuContent: View {
                 .foregroundStyle(color(for: report.overall))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(EffectiveState.statusLine(for: report))
+                Text(headlineStatus)
                     .font(.system(size: 12, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
                 Text(lifecycleDescription)
@@ -258,7 +260,7 @@ struct NativeMenuContent: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("DeskTidy status: \(EffectiveState.statusLine(for: report)). \(lifecycleDescription)")
+        .accessibilityLabel("DeskTidy status: \(headlineStatus). \(lifecycleDescription)")
     }
 
     private var details: some View {
@@ -363,12 +365,19 @@ struct NativeMenuContent: View {
             return "\(source) invalid\(attempted) — \(reason)"
         }
     }
+    private var headlineStatus: String {
+        if case .notLoaded(let reason) = model.lifecycle {
+            return "Not loaded — \(reason)"
+        }
+        return EffectiveState.statusLine(for: report)
+    }
+
     private var lifecycleDescription: String {
         switch model.lifecycle {
         case .active:
             return "DeskTidy is active."
-        case .paused:
-            return "DeskTidy is paused."
+        case .notLoaded(let reason):
+            return "DeskTidy is not loaded: \(reason)"
         case .fixture(let description):
             return description
         case .unavailable(let reason):

@@ -36,6 +36,7 @@ enum CanonicalCoreRefusal: Error, Equatable {
     case targetMismatch
     case targetUnavailable
     case paused
+    case invalidPauseDuration
     case unauthorized(String)
     case invalidTarget(String)
     case invalidReceipt(String)
@@ -73,8 +74,22 @@ struct CanonicalCoreEvent: Equatable {
 enum CanonicalLifecycleStatus: Equatable {
     case fixture(String)
     case active
-    case paused
+    case notLoaded(String)
     case unavailable(String)
+}
+
+enum CanonicalPauseState: Equatable {
+    case running
+    case pausedIndefinitely(since: Date)
+    case pausedUntil(Date)
+    case unreadable(String)
+
+    var isMovementBlocked: Bool {
+        switch self {
+        case .running: return false
+        case .pausedIndefinitely, .pausedUntil, .unreadable: return true
+        }
+    }
 }
 
 struct CanonicalEffectiveState {
@@ -110,12 +125,15 @@ struct CanonicalTidyNowResult {
 struct CanonicalCommandReceiptLedger {
     let url: URL
     private let fm = FileManager.default
+    private let lock = NSLock()
 
     init(receiptsDirectory: URL) {
         url = receiptsDirectory.appendingPathComponent("command-receipts.jsonl")
     }
 
     func append(_ receipt: CanonicalCommandReceipt) throws {
+        lock.lock()
+        defer { lock.unlock() }
         try fm.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys]
@@ -133,6 +151,8 @@ struct CanonicalCommandReceiptLedger {
     }
 
     func readAll() -> [CanonicalCommandReceipt] {
+        lock.lock()
+        defer { lock.unlock() }
         guard let data = fm.contents(atPath: url.path),
               let text = String(data: data, encoding: .utf8) else { return [] }
         return text.split(separator: "\n", omittingEmptySubsequences: true).compactMap {
@@ -156,6 +176,134 @@ final class CanonicalApplicationCore {
     private let pauseURL: URL
     private let commandReceipts: CanonicalCommandReceiptLedger
     private let iso: ISO8601DateFormatter
+    private let dateNow: () -> Date
+    private let monotonicNow: () -> TimeInterval
+    private let bootSessionID: () -> String
+    private let beforeMove: () -> Void
+    private let tidyLock = NSLock()
+    private let pauseStateLock = NSLock()
+
+    private enum CommandExecutionFailure: Error {
+        case refusal(CanonicalCoreRefusal)
+    }
+    private struct SweepInterruption: Error {
+        let result: (moved: [Receipt], failed: [Receipt], skippedFresh: Int)
+        let refusal: CanonicalCoreRefusal
+    }
+
+
+    private struct DurablePauseStateRecord: Codable {
+        enum Mode: String, Codable {
+            case running
+            case pausedIndefinitely
+            case pausedUntil
+        }
+
+        private enum CodingKeys: String, CodingKey, CaseIterable {
+            case schema
+            case mode
+            case changedAtUnixSeconds
+            case durationSeconds
+            case expiresAtUnixSeconds
+            case monotonicStartedAt
+            case bootSessionID
+        }
+
+        private struct AnyCodingKey: CodingKey {
+            let stringValue: String
+            let intValue: Int?
+
+            init?(stringValue: String) {
+                self.stringValue = stringValue
+                intValue = nil
+            }
+
+            init?(intValue: Int) {
+                stringValue = String(intValue)
+                self.intValue = intValue
+            }
+        }
+
+        let schema: Int
+        let mode: Mode
+        let changedAtUnixSeconds: TimeInterval
+        let durationSeconds: TimeInterval?
+        let expiresAtUnixSeconds: TimeInterval?
+        let monotonicStartedAt: TimeInterval?
+        let bootSessionID: String?
+
+        init(schema: Int = 1, mode: Mode, changedAtUnixSeconds: TimeInterval,
+             durationSeconds: TimeInterval? = nil, expiresAtUnixSeconds: TimeInterval? = nil,
+             monotonicStartedAt: TimeInterval? = nil, bootSessionID: String? = nil) {
+            self.schema = schema
+            self.mode = mode
+            self.changedAtUnixSeconds = changedAtUnixSeconds
+            self.durationSeconds = durationSeconds
+            self.expiresAtUnixSeconds = expiresAtUnixSeconds
+            self.monotonicStartedAt = monotonicStartedAt
+            self.bootSessionID = bootSessionID
+        }
+
+        init(from decoder: Decoder) throws {
+            let raw = try decoder.container(keyedBy: AnyCodingKey.self)
+            let keys = Set(raw.allKeys.map(\.stringValue))
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            let schema = try values.decode(Int.self, forKey: .schema)
+            let mode = try values.decode(Mode.self, forKey: .mode)
+            let changedAt = try values.decode(TimeInterval.self, forKey: .changedAtUnixSeconds)
+            guard schema == 1, changedAt.isFinite else {
+                throw DecodingError.dataCorruptedError(forKey: .schema, in: values,
+                                                       debugDescription: "unsupported durable pause state")
+            }
+
+            self.schema = schema
+            self.mode = mode
+            self.changedAtUnixSeconds = changedAt
+            switch mode {
+            case .running, .pausedIndefinitely:
+                guard keys == Set(["schema", "mode", "changedAtUnixSeconds"]) else {
+                    throw DecodingError.dataCorruptedError(forKey: .mode, in: values,
+                                                           debugDescription: "unexpected durable pause fields")
+                }
+                durationSeconds = nil
+                expiresAtUnixSeconds = nil
+                monotonicStartedAt = nil
+                bootSessionID = nil
+            case .pausedUntil:
+                guard keys == Set(["schema", "mode", "changedAtUnixSeconds", "durationSeconds",
+                                   "expiresAtUnixSeconds", "monotonicStartedAt", "bootSessionID"]) else {
+                    throw DecodingError.dataCorruptedError(forKey: .mode, in: values,
+                                                           debugDescription: "incomplete durable pause deadline")
+                }
+                let duration = try values.decode(TimeInterval.self, forKey: .durationSeconds)
+                let expiresAt = try values.decode(TimeInterval.self, forKey: .expiresAtUnixSeconds)
+                let monotonicStart = try values.decode(TimeInterval.self, forKey: .monotonicStartedAt)
+                let boot = try values.decode(String.self, forKey: .bootSessionID)
+                guard duration.isFinite, duration > 0, expiresAt.isFinite,
+                      monotonicStart.isFinite, !boot.isEmpty else {
+                    throw DecodingError.dataCorruptedError(forKey: .durationSeconds, in: values,
+                                                           debugDescription: "invalid durable pause deadline")
+                }
+                durationSeconds = duration
+                expiresAtUnixSeconds = expiresAt
+                monotonicStartedAt = monotonicStart
+                bootSessionID = boot
+            }
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var values = encoder.container(keyedBy: CodingKeys.self)
+            try values.encode(schema, forKey: .schema)
+            try values.encode(mode, forKey: .mode)
+            try values.encode(changedAtUnixSeconds, forKey: .changedAtUnixSeconds)
+            if mode == .pausedUntil {
+                try values.encode(durationSeconds, forKey: .durationSeconds)
+                try values.encode(expiresAtUnixSeconds, forKey: .expiresAtUnixSeconds)
+                try values.encode(monotonicStartedAt, forKey: .monotonicStartedAt)
+                try values.encode(bootSessionID, forKey: .bootSessionID)
+            }
+        }
+    }
 
     init(
         movement: MovementService,
@@ -166,7 +314,11 @@ final class CanonicalApplicationCore {
         authorize: @escaping (CanonicalCoreAuthorizationRequest) -> CanonicalCoreAuthorization,
         emit: @escaping (CanonicalCoreEvent) -> Void = { _ in },
         fm: FileManager = .default,
-        configurationStore: NativeConfigurationStore? = nil
+        configurationStore: NativeConfigurationStore? = nil,
+        dateNow: @escaping () -> Date = { Date() },
+        monotonicNow: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        bootSessionID: @escaping () -> String = { CanonicalApplicationCore.currentBootSessionID() },
+        beforeMove: @escaping () -> Void = {}
     ) {
         self.movement = movement
         self.nativeConfigURL = nativeConfigURL
@@ -179,6 +331,10 @@ final class CanonicalApplicationCore {
         self.configurationStore = configurationStore ?? NativeConfigurationStore(url: nativeConfigURL, fm: fm)
         self.pauseURL = nativeConfigURL.deletingLastPathComponent().appendingPathComponent("pause-state.json")
         self.commandReceipts = CanonicalCommandReceiptLedger(receiptsDirectory: movement.ledger.receiptsDir)
+        self.dateNow = dateNow
+        self.monotonicNow = monotonicNow
+        self.bootSessionID = bootSessionID
+        self.beforeMove = beforeMove
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         self.iso = formatter
@@ -212,7 +368,8 @@ final class CanonicalApplicationCore {
             lifecycleStatus: {
                 switch EffectiveState.compute().overall {
                 case .runningHealthy: return .active
-                case .pausedNotLoaded: return .paused
+                case .pausedNotLoaded:
+                    return .notLoaded("DeskTidy service is not loaded")
                 case .foreignConflict, .degradedLedger, .ambiguous:
                     return .unavailable(EffectiveState.compute().overallReason)
                 }
@@ -236,11 +393,27 @@ final class CanonicalApplicationCore {
             emit: emit
         )
     }
+    private static func currentBootSessionID() -> String {
+        var bootTime = timeval()
+        var size = MemoryLayout<timeval>.size
+        let result = "kern.boottime".withCString {
+            sysctlbyname($0, &bootTime, &size, nil, 0)
+        }
+        guard result == 0 else { return "unavailable" }
+        return "\(bootTime.tv_sec).\(bootTime.tv_usec)"
+    }
+
 
     // MARK: Read APIs
 
     func effectiveState() -> CanonicalEffectiveState {
-        CanonicalEffectiveState(effective: effectiveStateProvider(), isPaused: isPaused())
+        CanonicalEffectiveState(effective: effectiveStateProvider(), isPaused: pauseState().isMovementBlocked)
+    }
+
+    func pauseState() -> CanonicalPauseState {
+        pauseStateLock.lock()
+        defer { pauseStateLock.unlock() }
+        return readPauseState()
     }
 
     func target() -> TargetResolution { targetResolver() }
@@ -314,39 +487,95 @@ final class CanonicalApplicationCore {
     }
 
     func pause() -> CanonicalCommandResult {
-        execute(command: .pause, currentTarget: currentResolvedTargetPath()) {
-            try self.writePauseState(true)
+        pauseIndefinitely()
+    }
+
+    func pauseIndefinitely() -> CanonicalCommandResult {
+        switch readyForTarget() {
+        case .failure(let refusal):
+            return refused(command: .pause, reason: refusal)
+        case .success(let target):
+            return execute(command: .pause, currentTarget: target) {
+                self.pauseStateLock.lock()
+                defer { self.pauseStateLock.unlock() }
+                try self.writePauseState(DurablePauseStateRecord(
+                    mode: .pausedIndefinitely,
+                    changedAtUnixSeconds: self.dateNow().timeIntervalSince1970
+                ))
+            }
+        }
+    }
+
+    func pause(for duration: TimeInterval) -> CanonicalCommandResult {
+        guard duration.isFinite, duration > 0 else {
+            return refused(command: .pause, reason: .invalidPauseDuration)
+        }
+        switch readyForTarget() {
+        case .failure(let refusal):
+            return refused(command: .pause, reason: refusal)
+        case .success(let target):
+            return execute(command: .pause, currentTarget: target) {
+                let changedAt = self.dateNow().timeIntervalSince1970
+                self.pauseStateLock.lock()
+                defer { self.pauseStateLock.unlock() }
+                try self.writePauseState(DurablePauseStateRecord(
+                    mode: .pausedUntil,
+                    changedAtUnixSeconds: changedAt,
+                    durationSeconds: duration,
+                    expiresAtUnixSeconds: changedAt + duration,
+                    monotonicStartedAt: self.monotonicNow(),
+                    bootSessionID: self.bootSessionID()
+                ))
+            }
         }
     }
 
     func resume() -> CanonicalCommandResult {
-        execute(command: .resume, currentTarget: currentResolvedTargetPath()) {
-            try self.writePauseState(false)
+        switch readyForTarget() {
+        case .failure(let refusal):
+            return refused(command: .resume, reason: refusal)
+        case .success(let target):
+            return execute(command: .resume, currentTarget: target) {
+                self.pauseStateLock.lock()
+                defer { self.pauseStateLock.unlock() }
+                try self.writePauseState(DurablePauseStateRecord(
+                    mode: .running,
+                    changedAtUnixSeconds: self.dateNow().timeIntervalSince1970
+                ))
+            }
         }
     }
 
     func tidyNow() -> CanonicalTidyNowResult {
-        switch readyForMovement(command: .tidyNow) {
+        tidyLock.lock()
+        defer { tidyLock.unlock() }
+        switch readyForMovement() {
         case .failure(let refusal):
             _ = refused(command: .tidyNow, reason: refusal)
             return CanonicalTidyNowResult(moved: [], failed: [], skippedFresh: 0, refusal: refusal, receiptID: nil)
         case .success(let target):
+            var sweepResult = (moved: [Receipt](), failed: [Receipt](), skippedFresh: 0)
             let commandResult = execute(command: .tidyNow, currentTarget: target) {
+                try self.requireMovementReady(expectedTarget: target)
                 _ = self.movement.startupReconcile()
+                try self.requireMovementReady(expectedTarget: target)
+                do {
+                    sweepResult = try self.sweep(target: URL(fileURLWithPath: target, isDirectory: true),
+                                                 expectedTarget: target)
+                } catch let interruption as SweepInterruption {
+                    sweepResult = interruption.result
+                    throw CommandExecutionFailure.refusal(interruption.refusal)
+                }
             }
-            guard commandResult.outcome == .completed else {
-                return CanonicalTidyNowResult(moved: [], failed: [], skippedFresh: 0,
-                                              refusal: commandResult.refusal, receiptID: commandResult.receiptID)
-            }
-            let sweep = sweep(target: URL(fileURLWithPath: target, isDirectory: true))
-            return CanonicalTidyNowResult(moved: sweep.moved, failed: sweep.failed,
-                                          skippedFresh: sweep.skippedFresh, refusal: nil,
+            return CanonicalTidyNowResult(moved: sweepResult.moved, failed: sweepResult.failed,
+                                          skippedFresh: sweepResult.skippedFresh,
+                                          refusal: commandResult.refusal,
                                           receiptID: commandResult.receiptID)
         }
     }
 
     func undo(receiptID: String) -> CanonicalCommandResult {
-        switch readyForMovement(command: .undo) {
+        switch readyForMovement() {
         case .failure(let refusal):
             return refused(command: .undo, reason: refusal)
         case .success(let target):
@@ -362,6 +591,9 @@ final class CanonicalApplicationCore {
             }
             var moved: Receipt?
             let result = execute(command: .undo, currentTarget: target) {
+                self.pauseStateLock.lock()
+                defer { self.pauseStateLock.unlock() }
+                try self.requireMovementReadyWhileLocked(expectedTarget: target)
                 moved = self.movement.undo(receipt: original)
                 guard moved?.outcome == "moved" else {
                     throw CocoaError(.fileWriteUnknown)
@@ -382,9 +614,10 @@ final class CanonicalApplicationCore {
                          body: () throws -> Void) -> CanonicalCommandResult {
         let request = CanonicalCoreAuthorizationRequest(command: command, currentTarget: currentTarget,
                                                         requestedTarget: requestedTarget)
-        guard case .allowed = authorize(request) else {
+        let authorization = authorize(request)
+        guard case .allowed = authorization else {
             let refusal: CanonicalCoreRefusal
-            if case .refused(let reason) = authorize(request) { refusal = .unauthorized(reason) }
+            if case .refused(let reason) = authorization { refusal = .unauthorized(reason) }
             else { refusal = .unauthorized("authorization was not granted") }
             return refused(command: command, reason: refusal)
         }
@@ -401,12 +634,23 @@ final class CanonicalApplicationCore {
         do {
             try body()
         } catch {
+            let commandRefusal: CanonicalCoreRefusal?
+            if let failure = error as? CommandExecutionFailure,
+               case .refusal(let refusal) = failure {
+                commandRefusal = refusal
+            } else {
+                commandRefusal = nil
+            }
+            let detail = commandRefusal.map(refusalText) ?? error.localizedDescription
             let failed = CanonicalCommandReceipt(schema: 1, id: receiptID, command: command,
-                                                 outcome: .failed, occurredAt: now(),
-                                                 detail: error.localizedDescription)
+                                                 outcome: .failed, occurredAt: now(), detail: detail)
             try? commandReceipts.append(failed)
+            if let commandRefusal {
+                emit(CanonicalCoreEvent(kind: .commandRefused, command: command, receiptID: receiptID,
+                                        message: refusalText(commandRefusal)))
+            }
             return CanonicalCommandResult(command: command, outcome: .failed,
-                                          refusal: nil, receiptID: receiptID)
+                                          refusal: commandRefusal, receiptID: receiptID)
         }
 
         let completed = CanonicalCommandReceipt(schema: 1, id: receiptID, command: command,
@@ -423,8 +667,12 @@ final class CanonicalApplicationCore {
         return CanonicalCommandResult(command: command, outcome: .failed, refusal: reason, receiptID: nil)
     }
 
-    private func readyForMovement(command: CanonicalCoreCommand) -> Result<String, CanonicalCoreRefusal> {
-        if isPaused() { return .failure(.paused) }
+    private func readyForMovement() -> Result<String, CanonicalCoreRefusal> {
+        if pauseState().isMovementBlocked { return .failure(.paused) }
+        return readyForTarget()
+    }
+
+    private func readyForTarget() -> Result<String, CanonicalCoreRefusal> {
         switch targetResolver() {
         case .invalid(let reason, let source, _):
             if source == .nativeConfig { return .failure(.invalidTargetConfiguration) }
@@ -443,16 +691,67 @@ final class CanonicalApplicationCore {
         return nil
     }
 
-    private func isPaused() -> Bool {
-        guard let data = fm.contents(atPath: pauseURL.path),
-              let text = String(data: data, encoding: .utf8) else { return false }
-        return text == "paused\n" || text != "running\n"
+    private func requireMovementReady(expectedTarget: String) throws {
+        pauseStateLock.lock()
+        defer { pauseStateLock.unlock() }
+        try requireMovementReadyWhileLocked(expectedTarget: expectedTarget)
     }
 
-    private func writePauseState(_ paused: Bool) throws {
+    private func requireMovementReadyWhileLocked(expectedTarget: String) throws {
+        guard !readPauseState().isMovementBlocked else {
+            throw CommandExecutionFailure.refusal(.paused)
+        }
+        switch readyForTarget() {
+        case .failure(let refusal):
+            throw CommandExecutionFailure.refusal(refusal)
+        case .success(let current):
+            guard AuthorityGuard.canonicalize(current) == AuthorityGuard.canonicalize(expectedTarget) else {
+                throw CommandExecutionFailure.refusal(.targetMismatch)
+            }
+        }
+    }
+
+    private func readPauseState() -> CanonicalPauseState {
+        if (try? fm.destinationOfSymbolicLink(atPath: pauseURL.path)) != nil {
+            return .unreadable("pause state is a symbolic link")
+        }
+        guard fm.fileExists(atPath: pauseURL.path) else { return .running }
+        guard let data = fm.contents(atPath: pauseURL.path) else {
+            return .unreadable("pause state cannot be read")
+        }
+        do {
+            let record = try JSONDecoder().decode(DurablePauseStateRecord.self, from: data)
+            switch record.mode {
+            case .running:
+                return .running
+            case .pausedIndefinitely:
+                return .pausedIndefinitely(since: Date(timeIntervalSince1970: record.changedAtUnixSeconds))
+            case .pausedUntil:
+                guard let duration = record.durationSeconds,
+                      let expiresAt = record.expiresAtUnixSeconds,
+                      let monotonicStartedAt = record.monotonicStartedAt,
+                      let recordBootSessionID = record.bootSessionID else {
+                    return .unreadable("bounded pause is incomplete")
+                }
+                if dateNow().timeIntervalSince1970 >= expiresAt {
+                    return .running
+                }
+                if recordBootSessionID == bootSessionID(),
+                   monotonicNow() >= monotonicStartedAt + duration {
+                    return .running
+                }
+                return .pausedUntil(Date(timeIntervalSince1970: expiresAt))
+            }
+        } catch {
+            return .unreadable("pause state is unreadable: \(error.localizedDescription)")
+        }
+    }
+
+    private func writePauseState(_ state: DurablePauseStateRecord) throws {
         try fm.createDirectory(at: pauseURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let data = Data((paused ? "paused\n" : "running\n").utf8)
-        try data.write(to: pauseURL, options: [.atomic])
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        try encoder.encode(state).write(to: pauseURL, options: [.atomic])
         try fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: pauseURL.path)
         try sync(pauseURL)
         try sync(pauseURL.deletingLastPathComponent())
@@ -465,7 +764,9 @@ final class CanonicalApplicationCore {
         guard Darwin.fsync(descriptor) == 0 else { throw CocoaError(.fileWriteUnknown) }
     }
 
-    private func sweep(target: URL) -> (moved: [Receipt], failed: [Receipt], skippedFresh: Int) {
+    private func sweep(target: URL, expectedTarget: String) throws
+        -> (moved: [Receipt], failed: [Receipt], skippedFresh: Int) {
+        try requireMovementReady(expectedTarget: expectedTarget)
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .isDirectoryKey, .isSymbolicLinkKey]
         let items: [URL]
         do {
@@ -487,8 +788,30 @@ final class CanonicalApplicationCore {
             let age = Date().timeIntervalSince(modified)
             guard age >= Config.settleSeconds else { skippedFresh += 1; continue }
             let route = classify(name: name, isDirectory: values.isDirectory == true)
-            guard let receipt = movement.perform(source: item, category: route.category, ruleID: route.ruleID,
-                                                 settleMTime: modified, settleAge: age) else { continue }
+            beforeMove()
+            pauseStateLock.lock()
+            let receipt: Receipt?
+            do {
+                try requireMovementReadyWhileLocked(expectedTarget: expectedTarget)
+                receipt = movement.perform(source: item, category: route.category, ruleID: route.ruleID,
+                                           settleMTime: modified, settleAge: age)
+            } catch let failure as CommandExecutionFailure {
+                pauseStateLock.unlock()
+                let refusal: CanonicalCoreRefusal
+                switch failure {
+                case .refusal(let value):
+                    refusal = value
+                }
+                throw SweepInterruption(
+                    result: (moved: moved, failed: failed, skippedFresh: skippedFresh),
+                    refusal: refusal
+                )
+            } catch {
+                pauseStateLock.unlock()
+                throw error
+            }
+            pauseStateLock.unlock()
+            guard let receipt else { continue }
             if receipt.outcome == "moved" {
                 moved.append(receipt)
                 emit(CanonicalCoreEvent(kind: .movementCompleted, command: .tidyNow,
@@ -530,6 +853,7 @@ final class CanonicalApplicationCore {
         case .targetMismatch: return "resolved target differs from the movement root"
         case .targetUnavailable: return "resolved target is unavailable"
         case .paused: return "DeskTidy is paused"
+        case .invalidPauseDuration: return "pause duration must be finite and greater than zero"
         case .unauthorized(let reason): return "not authorized: \(reason)"
         case .invalidTarget(let path): return "invalid target: \(path)"
         case .invalidReceipt(let id): return "receipt is not undo eligible: \(id)"

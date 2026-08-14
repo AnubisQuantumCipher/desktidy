@@ -33,7 +33,8 @@ final class PhaseCTests {
     }
 
     private func temporaryDirectory(_ label: String) -> URL {
-        let url = fm.temporaryDirectory.appendingPathComponent("desktidy-phasec-\(label)-\(UUID().uuidString)", isDirectory: true)
+        let url = URL(fileURLWithPath: "/private/tmp", isDirectory: true)
+            .appendingPathComponent("desktidy-phasec-\(label)-\(UUID().uuidString)", isDirectory: true)
         try! fm.createDirectory(at: url, withIntermediateDirectories: true)
         return url
     }
