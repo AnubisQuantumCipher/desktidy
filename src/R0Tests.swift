@@ -63,17 +63,17 @@ final class R0Tests {
 
     // ------------------------------------------------------------------ run
     func runAll() async -> Bool {
-        authorityControls()
+        await authorityControls()
         receiptProtocolControls()
         recoveryControls()
         confinementControls()
-        semanticsControls()
+        await semanticsControls()
         print("R0 CONTROLS: \(passCount) passed, \(failCount) failed")
         return failCount == 0
     }
 
     // -- authority guard (controls 1–6) --------------------------------------
-    private func authorityControls() {
+    private func authorityControls() async {
         let root = tempDir("watched")
 
         // C1: same root claimed by a foreign (personal-style) mover → CONFLICT.
@@ -158,10 +158,7 @@ final class R0Tests {
             setenv("DESKTIDY_AGENTS_DIR", agents.path, 1)
             setenv("DESKTIDY_LAUNCHD_STATE_FILE", fixture.path, 1)
             let engine = DeskTidy()
-            let sem = DispatchSemaphore(value: 0)
-            var code: Int32 = -1
-            Task { code = await engine.run(arguments: []); sem.signal() }
-            sem.wait()
+            let code = await engine.run(arguments: [])
             unsetenv("DESKTIDY_TARGET_DIR"); unsetenv("DESKTIDY_APP_DIR")
             unsetenv("DESKTIDY_AGENTS_DIR"); unsetenv("DESKTIDY_LAUNCHD_STATE_FILE")
             let stillThere = fm.fileExists(atPath: root.appendingPathComponent("should-not-move.pdf").path)
@@ -441,7 +438,7 @@ final class R0Tests {
     }
 
     // -- semantics (controls 24–30) ------------------------------------------
-    private func semanticsControls() {
+    private func semanticsControls() async {
         // C24 covered byte-for-byte in C10; assert again via distinct path for clarity.
         do {
             let (root, _, _, svc) = makeEngineSandbox()
@@ -481,9 +478,7 @@ final class R0Tests {
             setenv("DESKTIDY_APP_DIR", app.path, 1)
             setenv("DESKTIDY_AGENTS_DIR", tempDir("agents").path, 1)  // empty agents dir → sole authority
             let engine = DeskTidy()
-            let sem = DispatchSemaphore(value: 0)
-            Task { _ = await engine.run(arguments: []); sem.signal() }
-            sem.wait()
+            _ = await engine.run(arguments: [])
             unsetenv("DESKTIDY_TARGET_DIR"); unsetenv("DESKTIDY_APP_DIR"); unsetenv("DESKTIDY_AGENTS_DIR")
             check("C26", "AI suggestion cannot move a file (Inbox item stays put)",
                   fm.fileExists(atPath: stray.path))
@@ -503,13 +498,9 @@ final class R0Tests {
             let lockRefused = !e2.acquireLock()
             e1.releaseLock()
             let e3 = DeskTidy()
-            let sem = DispatchSemaphore(value: 0)
-            Task { _ = await e3.run(arguments: []); sem.signal() }
-            sem.wait()
+            _ = await e3.run(arguments: [])
             let e4 = DeskTidy()
-            let sem2 = DispatchSemaphore(value: 0)
-            Task { _ = await e4.run(arguments: []); sem2.signal() }
-            sem2.wait()
+            _ = await e4.run(arguments: [])
             unsetenv("DESKTIDY_TARGET_DIR"); unsetenv("DESKTIDY_APP_DIR"); unsetenv("DESKTIDY_AGENTS_DIR")
             let ledger = ReceiptLedger(appDirectory: app)
             let movedReceipts = ledger.readAll().receipts.filter { $0.outcome == "moved" }
