@@ -80,3 +80,5 @@ enum Category: CaseIterable {
         }
     }
 }
+
+enum DeskTidyVersion { static let string = "v1.2.0" }

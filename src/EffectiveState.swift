@@ -16,8 +16,8 @@ import Foundation
 //  Every unprovable input degrades the overall state — never upgrades it.
 //
 //  This file (plus Config/Authority/Receipts) is the complete dependency set
-//  of the menu-bar app. It contains NO mutating operations: no moveItem,
-//  no removeItem, no bootstrap/bootout, no writes to the ledger.
+//  of the menu-bar app. It performs no file mutations, no service (un)loading,
+//  and no ledger writes — enforced by a comment-stripping CI grep.
 // ============================================================================
 
 /// Overall product state, strictly ordered fail-closed:

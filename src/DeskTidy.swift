@@ -414,7 +414,6 @@ extension DeskTidy {
     }
 }
 
-enum DeskTidyVersion { static let string = "v1.2.0" }
 
 @main
 struct DeskTidyMain {

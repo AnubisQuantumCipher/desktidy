@@ -73,6 +73,39 @@ jobs:
           grep -q 'AuthorityGuard().evaluate' src/DeskTidy.swift
           echo "all setup/start paths invoke the authority guard"
 
+      - name: R1A effective-state gates (matrix, parity, fail-closed UI, read-only)
+        run: ./build/desktidy-sort --state-test
+
+      - name: R1A app build + headless smokes (no GUI session needed)
+        run: |
+          ./scripts/build-app.sh build
+          # conflict fixture: the app binary must fail closed, never claim running
+          AG=$(mktemp -d); TG=$(mktemp -d); AP=$(mktemp -d)
+          PROG=$(mktemp -d)/mover; printf '#!/bin/sh\n' > "$PROG"
+          /usr/bin/python3 - "$AG" "$TG" "$PROG" <<'PYEOF2'
+          import plistlib, sys, os, json
+          ag, tg, prog = sys.argv[1], sys.argv[2], sys.argv[3]
+          with open(os.path.join(ag, 'com.example.fixture-mover.plist'), 'wb') as f:
+              plistlib.dump({'Label': 'com.example.fixture-mover', 'ProgramArguments': [prog], 'WatchPaths': [tg]}, f)
+          with open(os.path.join(ag, 'state.json'), 'w') as f:
+              json.dump({'com.example.fixture-mover': 'running'}, f)
+          PYEOF2
+          OUT=$(DESKTIDY_AGENTS_DIR="$AG" DESKTIDY_TARGET_DIR="$TG" DESKTIDY_APP_DIR="$AP"                 DESKTIDY_LAUNCHD_STATE_FILE="$AG/state.json"                 ./build/DeskTidy.app/Contents/MacOS/DeskTidy --smoke | tail -1)
+          echo "$OUT"; test "$OUT" = "SMOKE overall=foreignConflict"
+          # clean fixture: pausedNotLoaded
+          AG2=$(mktemp -d); TG2=$(mktemp -d); AP2=$(mktemp -d)
+          OUT2=$(DESKTIDY_AGENTS_DIR="$AG2" DESKTIDY_TARGET_DIR="$TG2" DESKTIDY_APP_DIR="$AP2"                  ./build/DeskTidy.app/Contents/MacOS/DeskTidy --smoke | tail -1)
+          echo "$OUT2"; test "$OUT2" = "SMOKE overall=pausedNotLoaded"
+
+      - name: R1A read-only confinement grep (app sources contain no mutation calls)
+        run: |
+          for f in app/DeskTidyApp.swift src/EffectiveState.swift; do
+            if sed 's://.*$::' "$f" | grep -nE 'moveItem|removeItem|copyItem|createFile|bootstrap|bootout|writePending|ledger\.append'; then
+              echo "mutation symbol found in $f"; exit 1
+            fi
+          done
+          echo "app surface is mutation-free"
+
       - name: Collision safety (never overwrite)
         run: |
           SB="$(mktemp -d)/desk"; APP="$(mktemp -d)/app"; mkdir -p "$SB" "$APP"
