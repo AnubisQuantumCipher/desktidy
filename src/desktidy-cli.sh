@@ -76,6 +76,14 @@ cmd_setup() {
   "$SORT_BIN" --self-test >/dev/null 2>&1 || die "engine self-test failed"
   ok "Engine self-test passed"
 
+  # R0 single-movement-authority guard: refuse to install agents when another
+  # sorting authority can move entries from the same root. Fail closed.
+  if ! DESKTIDY_TARGET_DIR="$TARGET" "$SORT_BIN" --authority-check; then
+    echo
+    die "another movement authority owns this folder (details above) — DeskTidy will not double-sort a root. Use a disjoint --target, or remove the other service with its own teardown."
+  fi
+  ok "Movement authority clear for this root"
+
   local gen
   gen() { sed -e "s#__SORT_BIN__#$SORT_BIN#g" -e "s#__NOTIFY_SH__#$NOTIFY_SH#g" \
               -e "s#__APPDIR__#$APPDIR#g" -e "s#__TARGET__#$TARGET#g" "$1"; }
@@ -126,6 +134,13 @@ cmd_status() {
   need_components
   say "DeskTidy status"
   "$SORT_BIN" --health | sed 's/^/  /'
+  echo
+  local target_now
+  target_now="$(/usr/libexec/PlistBuddy -c 'Print :EnvironmentVariables:DESKTIDY_TARGET_DIR' "$LA/com.desktidy.sort.plist" 2>/dev/null || echo "$HOME/Desktop")"
+  DESKTIDY_TARGET_DIR="$target_now" "$SORT_BIN" --authority-diagnose | sed 's/^/  /'
+  echo
+  say "Recent movement receipts"
+  "$SORT_BIN" --history 5 | sed 's/^/  /'
   echo
   local lbl st
   for lbl in com.desktidy.sort com.desktidy.notify; do

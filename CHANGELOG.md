@@ -1,5 +1,25 @@
 # Changelog
 
+## v1.2.0 — R0: single movement authority + canonical receipts
+
+- **Authority guard:** DeskTidy now refuses to sort a folder that another
+  launchd agent already watches (symlink-resolved, device/inode-compared
+  roots; unknown/unreadable agents fail closed). `desktidy setup`,
+  `install.sh`, and every engine start converge on the same guard.
+  New: `desktidy-sort --authority-diagnose [--json]`.
+- **Receipts:** every movement attempt now writes a durable, hash-chained
+  receipt (prepare → move → complete, with deterministic crash reconciliation
+  that reports `failed`/`recovered`/`indeterminate` — never invented success).
+  New: `--history [n] [--json]`, `--verify-ledger`. Schema + state machine in
+  docs/R0_AUTHORITY_AND_RECEIPTS.md.
+- **Confinement:** symlink sources, symlinked destination dirs, `..`
+  traversal, and out-of-root paths are rejected before any write; symlinks at
+  the root are skipped (previously a symlinked file could be moved).
+- **Verification:** 31 new hostile controls (`--r0-test`) run in CI alongside
+  the existing 17-check self-test; an A→B→A tamper exercise confirmed the
+  authority controls fail for the intended semantic reason when the guard is
+  sabotaged.
+
 ## v1.0.0
 
 First public release.

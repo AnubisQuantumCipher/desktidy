@@ -108,6 +108,13 @@ Removes the tool completely. **Your folders and every file it ever sorted stay e
 
 - **`desktidy-sort`** — a small, signed Swift binary. Pure, deterministic rules (extension + a couple of name heuristics). A single-instance lock keeps the watcher and any manual run from colliding.
 - **`desktidy-notify.sh`** — a tiny shell watcher that turns each logged move into a notification.
+- **One movement authority, receipts for everything (v1.2.0):** DeskTidy
+  refuses to sort a folder that another automation already watches (no
+  double-sorting, fails closed on ambiguity), and every move is recorded in a
+  durable, hash-chained receipt ledger with crash recovery — see
+  [docs/R0_AUTHORITY_AND_RECEIPTS.md](docs/R0_AUTHORITY_AND_RECEIPTS.md).
+  `desktidy-sort --history` shows recent receipts; `--verify-ledger` checks
+  the chain.
 - **Two `launchd` agents** in `~/Library/LaunchAgents/` (`com.desktidy.sort`, `com.desktidy.notify`) — this is what makes it survive reboots. They start at login, watch the folder, and relaunch themselves if needed.
 
 ## The folder scheme

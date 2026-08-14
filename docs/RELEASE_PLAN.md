@@ -5,13 +5,19 @@ drafts. Rule: the first native release earns trust before anything earns
 breadth. Every feature ships only when its **gate** — an executable check —
 passes. Nothing is "done" because it compiles or because an API exists._
 
-## R0 — Pre-flight (before any app code)
+## R0 — Pre-flight (before any app code) — ✅ IMPLEMENTED 2026-08-14
 
-| Item | Gate (executable) |
-|---|---|
-| **Single-mover guard** — `desktidy setup` detects another watcher on the same root (foreign launchd plist with matching WatchPaths, or a known predecessor label) and warns/refuses | Test: install a dummy plist watching the target → `setup` must refuse; remove it → `setup` proceeds |
-| **Canonical receipt schema** — one structured move record (original name, final name, final path, rule that fired, timestamp, collision flag, mover identity, stable receipt ID); log remains append-only text + adds a machine-readable sidecar | Round-trip test: every CI sandbox move produces a receipt that reconstructs the final path byte-for-byte |
-| **ML authority policy adopted** ([ML_AUTHORITY_POLICY.md](ML_AUTHORITY_POLICY.md)) | CI grep-gate: no ML symbol reachable from the move path |
+| Item | Implementation | Gate (executable) |
+|---|---|---|
+| **Single-mover guard** — one authority per canonical watched root; every setup/start/move path refuses when a foreign launchd agent watches the same (symlink-resolved, device/inode-compared) root; ambiguity fails closed; takeover is deliberately NOT implemented | `AuthorityGuard` in [`src/Authority.swift`](../src/Authority.swift); wired into engine startup (`DeskTidy.run`), `desktidy setup` (`src/desktidy-cli.sh`), and `install.sh`; diagnose via `desktidy-sort --authority-diagnose [--json]` | `--r0-test` controls C01–C06 (same root, symlink-equivalent root, disjoint allowed, unreadable→fail-closed, stale-vs-loaded, engine refusal exit 2) |
+| **Canonical receipts** — schema v1, one append-only JSONL ledger with SHA-256 hash chain (unkeyed: integrity evidence, not author authentication), durable prepare→move→complete protocol, deterministic crash reconciliation (`failed` / `recovered` / `indeterminate` — never invented success), single history reader for status/history and future Undo | `Receipt`, `ReceiptLedger`, `MovementService` in [`src/Receipts.swift`](../src/Receipts.swift); `--history [n] [--json]`, `--verify-ledger`; full spec in [`R0_AUTHORITY_AND_RECEIPTS.md`](R0_AUTHORITY_AND_RECEIPTS.md) | `--r0-test` controls C07–C19 (durability, races, syscall failure, four restart states, malformed intent, digest tamper) |
+| **Movement confinement** — sources must be direct non-symlink children of the root; destinations must resolve inside the root; `..`/symlink escapes rejected before any write | `MovementService.validateConfinement` | `--r0-test` controls C20–C23 |
+| **ML authority policy adopted** ([ML_AUTHORITY_POLICY.md](ML_AUTHORITY_POLICY.md)) — probabilistic output cannot authorize movement | suggestions lane unchanged (write-only); movement service takes routes only from the deterministic classifier | `--r0-test` control C26 (a hostile suggestion file moves nothing) + C25 (Inbox fallback) |
+
+R0 exit criteria met: 31 hostile controls green, A→B→A tamper gate demonstrated
+(guard mutation → C01/C02/C05/C06 fail semantically → byte-exact restore →
+green), legacy 17-check self-test unchanged, live coexistence with a foreign
+personal mover verified on a real machine without modifying it.
 
 ## R1 — The trust release (first native app)
 

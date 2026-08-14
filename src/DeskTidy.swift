@@ -79,6 +79,11 @@ final class DeskTidy {
     let smartCompiledIn = false
     #endif
 
+    lazy var ledger = ReceiptLedger(appDirectory: appDirectory)
+    lazy var movement = MovementService(root: target, ledger: ledger,
+                                        moverVersion: DeskTidyVersion.string,
+                                        log: { [weak self] in self?.log($0) })
+
     // The target's own type-folders are skipped when scanning the root.
     var reservedRootNames: Set<String> { Set(Category.allCases.map { $0.folderName }) }
 
@@ -118,6 +123,21 @@ final class DeskTidy {
             do { try probeAccess(); print("access OK: \(target.path)"); return 0 }
             catch { print("NO ACCESS: \(target.path) — \(error.localizedDescription)"); return 1 }
         }
+        if arguments.contains("--authority-diagnose") || arguments.contains("--authority-check") {
+            return AuthorityGuard().diagnose(rootPath: target.path, json: arguments.contains("--json"))
+        }
+        if arguments.contains("--history") {
+            return printHistory(arguments: arguments)
+        }
+        if arguments.contains("--verify-ledger") {
+            if let problem = ledger.verifyChain() { print("LEDGER FAIL: \(problem)"); return 1 }
+            let (rs, _) = ledger.readAll()
+            print("LEDGER OK: \(rs.count) receipt(s), digest chain intact")
+            return 0
+        }
+        if arguments.contains("--r0-test") {
+            return await R0Tests(engineVersion: DeskTidyVersion.string).runAll() ? 0 : 1
+        }
         if arguments.contains("--model-smoke") {
             #if canImport(FoundationModels)
             if #available(macOS 26, *) { return await modelSmokeTest() ? 0 : 1 }
@@ -135,6 +155,27 @@ final class DeskTidy {
             log("ERROR: cannot access the target folder (Full Disk Access may not be granted): \(error.localizedDescription)")
             return 0
         }
+
+        // R0 authority gate: refuse movement when another authority shares the
+        // root (or authority cannot be proven). Runs on EVERY movement start —
+        // launchd wake, sort-now, and any future entry point all pass through here.
+        switch AuthorityGuard().evaluate(rootPath: target.path) {
+        case .sole, .soleWithStale:
+            break
+        case .conflict(let movers):
+            let labels = movers.map { $0.label }.joined(separator: ", ")
+            log("AUTHORITY CONFLICT: refusing to move — another authority watches this root: \(labels)")
+            fputs("DeskTidy: authority conflict (\(labels)) — run --authority-diagnose\n", stderr)
+            return 2
+        case .ambiguous(let reason, _):
+            log("AUTHORITY AMBIGUOUS: failing closed — \(reason)")
+            fputs("DeskTidy: movement authority ambiguous — failing closed. \(reason)\n", stderr)
+            return 3
+        }
+
+        // R0 crash recovery: reconcile any interrupted movement intents
+        // against filesystem truth before making new decisions.
+        _ = movement.startupReconcile()
 
         var (moved, skippedFresh) = deterministicSweep()
         // Files dropped moments ago get skipped by the settle window. Instead of
@@ -215,9 +256,18 @@ final class DeskTidy {
             guard !shouldSkipPartial(name) else { continue }
             do {
                 let values = try item.resourceValues(forKeys: keys)
+                if values.isSymbolicLink == true {
+                    log("SKIP symlink at root: \(safeLog(name))")
+                    continue
+                }
                 let modified = values.contentModificationDate ?? Date()
-                guard Date().timeIntervalSince(modified) >= settleSeconds else { skippedFresh += 1; continue }
-                if move(item, to: classify(name: name, isDirectory: values.isDirectory == true)) { moved += 1 }
+                let age = Date().timeIntervalSince(modified)
+                guard age >= settleSeconds else { skippedFresh += 1; continue }
+                let route = classify(name: name, isDirectory: values.isDirectory == true)
+                let receipt = movement.perform(source: item, category: route.category,
+                                               ruleID: route.ruleID,
+                                               settleMTime: modified, settleAge: age)
+                if receipt?.outcome == "moved" { moved += 1 }
             } catch {
                 log("ERROR: could not inspect \(safeLog(name)): \(error.localizedDescription)")
             }
@@ -227,20 +277,21 @@ final class DeskTidy {
     }
 
     // -- routing ------------------------------------------------------------
-    func classify(name: String, isDirectory: Bool) -> Category {
-        if isDirectory { return .folders }
+    // Returns the destination and a stable rule ID recorded in receipts.
+    func classify(name: String, isDirectory: Bool) -> (category: Category, ruleID: String) {
+        if isDirectory { return (.folders, "dir") }
         let lower = name.lowercased()
-        if lower.hasPrefix("screenshot ") || lower.hasPrefix("screen shot ") { return .screenshots }
-        if lower.hasPrefix("screen recording ") { return .videos }
+        if lower.hasPrefix("screenshot ") || lower.hasPrefix("screen shot ") { return (.screenshots, "prefix:screenshot") }
+        if lower.hasPrefix("screen recording ") { return (.videos, "prefix:screen-recording") }
 
         let ext = (name as NSString).pathExtension.lowercased()
-        if Config.imageExts.contains(ext)    { return .images }
-        if Config.videoExts.contains(ext)    { return .videos }
-        if Config.audioExts.contains(ext)    { return .audio }
-        if Config.archiveExts.contains(ext)  { return .archives }
-        if Config.codeExts.contains(ext)     { return .code }
-        if Config.documentExts.contains(ext) { return .documents }
-        return .inbox
+        if Config.imageExts.contains(ext)    { return (.images,    "ext:\(ext)") }
+        if Config.videoExts.contains(ext)    { return (.videos,    "ext:\(ext)") }
+        if Config.audioExts.contains(ext)    { return (.audio,     "ext:\(ext)") }
+        if Config.archiveExts.contains(ext)  { return (.archives,  "ext:\(ext)") }
+        if Config.codeExts.contains(ext)     { return (.code,      "ext:\(ext)") }
+        if Config.documentExts.contains(ext) { return (.documents, "ext:\(ext)") }
+        return (.inbox, "fallback:inbox")
     }
 
     func shouldSkipPartial(_ name: String) -> Bool {
@@ -248,24 +299,9 @@ final class DeskTidy {
         return [".crdownload", ".part", ".download", ".partial", ".tmp"].contains { lower.hasSuffix($0) }
     }
 
-    // -- the move (never overwrites) ---------------------------------------
-    func move(_ source: URL, to category: Category) -> Bool {
-        let directory = target.appendingPathComponent(category.folderName, isDirectory: true)
-        do {
-            try fm.createDirectory(at: directory, withIntermediateDirectories: true)
-            let dest = uniqueDestination(in: directory, for: source.lastPathComponent)
-            try fm.moveItem(at: source, to: dest)
-            // Log the FINAL name (which may carry a "(dup …)" suffix) so anything
-            // that follows the log — like the click-to-reveal notifier — points at
-            // the file that actually exists.
-            log("\(safeLog(dest.lastPathComponent)) -> \(category.folderName)/")
-            return true
-        } catch {
-            log("ERROR: could not move \(safeLog(source.lastPathComponent)): \(error.localizedDescription)")
-            return false
-        }
-    }
-
+    // NOTE (R0): the movement itself lives in MovementService (src/Receipts.swift)
+    // — the single code path allowed to move user files. uniqueDestination stays
+    // here only as the naming oracle exercised by --self-test.
     func uniqueDestination(in directory: URL, for fileName: String) -> URL {
         let direct = directory.appendingPathComponent(fileName)
         guard fm.fileExists(atPath: direct.path) else { return direct }
@@ -336,7 +372,7 @@ final class DeskTidy {
         ]
         var failures = 0
         for (name, isDir, expected) in cases {
-            let actual = classify(name: name, isDirectory: isDir)
+            let actual = classify(name: name, isDirectory: isDir).category
             if actual != expected {
                 fputs("FAIL classify \(name): \(actual.folderName), expected \(expected.folderName)\n", stderr); failures += 1
             }
@@ -361,7 +397,30 @@ final class DeskTidy {
     }
 }
 
-enum DeskTidyVersion { static let string = "v1.1.2" }
+extension DeskTidy {
+    // The single history reader (ReceiptLedger.readAll) drives status/history.
+    func printHistory(arguments: [String]) -> Int32 {
+        let (receipts, malformed) = ledger.readAll()
+        var count = 10
+        if let idx = arguments.firstIndex(of: "--history"), idx + 1 < arguments.count,
+           let n = Int(arguments[idx + 1]) { count = max(1, n) }
+        let recent = receipts.suffix(count)
+        if arguments.contains("--json") {
+            let enc = JSONEncoder(); enc.outputFormatting = [.prettyPrinted, .sortedKeys]
+            if let d = try? enc.encode(Array(recent)) { print(String(decoding: d, as: UTF8.self)) }
+        } else {
+            if recent.isEmpty { print("No movement receipts yet.") }
+            for r in recent {
+                let dest = r.finalDestRel ?? r.plannedDestRel
+                print("\(r.completedAt ?? r.preparedAt)  [\(r.outcome)]  \(r.sourceRel) -> \(dest)  rule=\(r.ruleID)\(r.failureCode.map { "  code=\($0)" } ?? "")")
+            }
+            if malformed > 0 { print("WARNING: \(malformed) malformed ledger line(s) — run --verify-ledger") }
+        }
+        return 0
+    }
+}
+
+enum DeskTidyVersion { static let string = "v1.2.0" }
 
 @main
 struct DeskTidyMain {

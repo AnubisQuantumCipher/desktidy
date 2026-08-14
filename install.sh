@@ -51,6 +51,16 @@ ok "Built and signed: $APPDIR/desktidy-sort"
 if "$APPDIR/desktidy-sort" --self-test >/dev/null 2>&1; then ok "Self-test passed"
 else echo "Self-test FAILED — aborting install."; exit 1; fi
 
+# 3b) R0 authority guard — never install a second mover onto a watched root
+if ! DESKTIDY_TARGET_DIR="$TARGET" "$APPDIR/desktidy-sort" --authority-check; then
+  echo
+  echo "Another movement authority owns this folder (details above)."
+  echo "DeskTidy fails closed rather than double-sorting a root. Choose a"
+  echo "disjoint --target, or remove the other service via its own teardown."
+  exit 2
+fi
+ok "Movement authority clear for this root"
+
 # 4) notifier + clickable-banner dependency (optional)
 cp "$SCRIPT_DIR/src/desktidy-notify.sh" "$APPDIR/desktidy-notify.sh"; chmod +x "$APPDIR/desktidy-notify.sh"
 if command -v terminal-notifier >/dev/null 2>&1; then

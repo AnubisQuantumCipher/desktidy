@@ -63,6 +63,16 @@ jobs:
           test -d "$SB/Folders/dropped-folder"
           echo "all routing assertions passed"
 
+      - name: R0 hostile controls (authority, receipts, confinement, recovery)
+        run: ./build/desktidy-sort --r0-test
+
+      - name: R0 entry-point convergence (every setup path calls the guard)
+        run: |
+          grep -q -- '--authority-check' src/desktidy-cli.sh
+          grep -q -- '--authority-check' install.sh
+          grep -q 'AuthorityGuard().evaluate' src/DeskTidy.swift
+          echo "all setup/start paths invoke the authority guard"
+
       - name: Collision safety (never overwrite)
         run: |
           SB="$(mktemp -d)/desk"; APP="$(mktemp -d)/app"; mkdir -p "$SB" "$APP"

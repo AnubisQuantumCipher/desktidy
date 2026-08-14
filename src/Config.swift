@@ -18,6 +18,11 @@ enum Config {
     /// This is what stops it grabbing a file mid-download or mid-save.
     static let settleSeconds: TimeInterval = 15
 
+    /// Version of the deterministic routing policy. Recorded in every movement
+    /// receipt so history stays interpretable if rules change. Bump when any
+    /// routing rule or extension set below changes meaning.
+    static let routingPolicyVersion = "1"
+
     // -- Folder names -------------------------------------------------------
     // Rename these to whatever you like. DeskTidy creates each folder on demand
     // (only when something actually needs it) and never touches these folders
