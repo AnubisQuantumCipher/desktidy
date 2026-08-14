@@ -19,6 +19,8 @@ mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 xcrun swiftc -O -parse-as-library \
   -target "arm64-apple-macosx$MACOS_MIN" \
   "$REPO/src/Config.swift" \
+  "$REPO/src/Paths.swift" \
+  "$REPO/src/TargetResolver.swift" \
   "$REPO/src/Authority.swift" \
   "$REPO/src/Receipts.swift" \
   "$REPO/src/EffectiveState.swift" \
