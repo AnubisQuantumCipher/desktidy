@@ -21,16 +21,8 @@ import SwiftUI
 @MainActor
 final class StateStore: ObservableObject {
     @Published var report: EffectiveStateReport = EffectiveState.compute()
-    private var timer: Timer?
 
     func refresh() { report = EffectiveState.compute() }
-
-    func startAutoRefresh() {
-        timer?.invalidate()
-        timer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.refresh() }
-        }
-    }
 }
 
 @main
@@ -52,7 +44,6 @@ struct DeskTidyApp: App {
     var body: some Scene {
         MenuBarExtra {
             ContentView(store: store)
-                .onAppear { store.startAutoRefresh() }
         } label: {
             // Template-rendered SF Symbol: legible on any wallpaper, filled
             // triangle/pause variants signal non-healthy states at a glance.
@@ -64,6 +55,10 @@ struct DeskTidyApp: App {
 
 struct ContentView: View {
     @ObservedObject var store: StateStore
+    // Periodic re-derivation on the main runloop — SwiftUI keeps the closure
+    // main-actor isolated, which also satisfies the macOS 14 toolchain's
+    // stricter concurrency checking (no manual Timer/Task capture).
+    private let ticker = Timer.publish(every: 15, on: .main, in: .common).autoconnect()
 
     private var r: EffectiveStateReport { store.report }
 
@@ -115,6 +110,8 @@ struct ContentView: View {
         }
         .padding(14)
         .frame(width: 340)
+        .onAppear { store.refresh() }
+        .onReceive(ticker) { _ in store.refresh() }
     }
 
     private var grid: some View {
