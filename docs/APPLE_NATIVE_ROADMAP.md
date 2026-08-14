@@ -1,5 +1,18 @@
 # DeskTidy × macOS Tahoe — Apple-Native Roadmap
 
+> **Revision 2 (2026-08-14, post evidence-remediation).** Every claim below is
+> now backed by a per-finding evidence row (F01–F35) in
+> [`EVIDENCE_MATRIX.md`](EVIDENCE_MATRIX.md) / [`.json`](EVIDENCE_MATRIX.json),
+> labeled DOCUMENTED / OBSERVED / BELIEVED / UNKNOWN against primary Apple
+> sources. Implementation order is governed by [`RELEASE_PLAN.md`](RELEASE_PLAN.md);
+> ML behavior is governed by [`ML_AUTHORITY_POLICY.md`](ML_AUTHORITY_POLICY.md).
+> Material corrections from verification: the **MCP-over-App-Intents claim is
+> struck** (press-only source, no Apple evidence — UNKNOWN); **Siri intent
+> actions and LLM/semantic Spotlight search are macOS 27-cycle**, not Tahoe;
+> **folder emoji/color decoration is a reverse-engineered mechanism**, demoted
+> to a feature-flagged spike; **UndoableIntent and the Intel sunset were
+> *upgraded*** to fully documented. Full list in the matrix.
+
 _Research date: 2026-08-14, against macOS 26.x ("Tahoe") and the Xcode 26 SDK.
 Every verdict was made against DeskTidy's non-negotiables: never deletes, never
 overwrites, local-only, AI suggests-only, unknown→Inbox, everything logged,
@@ -9,16 +22,17 @@ honest claims._
 
 One medium-sized piece of work — five or six intents (`TidyNow`,
 `PauseTidying(duration)`, `ResumeTidying`, `SortingStatus`, `UndoLastMove`,
-`WhereDidItGo(filename)`) — simultaneously lights up:
+`WhereDidItGo(filename)`) — simultaneously lights up (all DOCUMENTED for Tahoe, F13/F23/F24):
 
 - **Spotlight actions with auto-assigned quick keys** (type `td` ⏎ to sweep)
 - **Shortcuts actions** (compose with Tahoe's new folder automations)
-- **Siri**
+- **Siri** — *corrected: macOS 27-cycle per WWDC26 session framing (F13); not a Tahoe claim*
 - **Control Center / menu-bar Controls** (a pinnable Pause toggle)
 - **Widget buttons** (a "Sort now" button on a desktop widget)
-- **Apple's MCP bridge (macOS 26.1+)** — intents become drivable by AI agents,
-  which extends DeskTidy's existing agent-awareness story from "agents can read
-  our log" to "agents can operate us safely"
+- ~~Apple's MCP bridge~~ — **struck by evidence review**: press-sourced only
+  (9to5Mac), no primary Apple documentation found (status: UNKNOWN, F24). If it
+  ships, App Intents adoption positions DeskTidy for it at zero extra cost —
+  but it is not a reason to build, and not a claim to market.
 
 The new **`UndoableIntent`** protocol maps exactly onto the move log: undo
 becomes system-native. **Interactive snippets** let a Spotlight result show
@@ -31,13 +45,13 @@ which is itself the strongest technical argument for shipping the menu-bar app.
 
 | What | Why | Effort |
 |---|---|---|
-| **Catch `rateLimited` in smart triage** | FoundationModels rate-limits *background processes on battery* — our launchd agent is one. Catch → degrade to unknown→Inbox → log "AI throttled". Currently an unhandled failure lane. | small |
-| **Vision OCR on screenshots → deterministic rules** | `RecognizeTextRequest` reads each screenshot locally; the text feeds *user-visible deterministic rules* ("contains 'invoice' → Documents") and content-aware rename *suggestions*. ML output feeding deterministic rules keeps the safety story intact. The single highest-value product upgrade available on every macOS 26 Mac. | medium |
-| **NLEmbedding similarity suggestions** | LLM-free second triage engine: embed filename tokens, compare to per-folder centroids. Near-deterministic, no rate limits, no token budget. Better always-on default; reserve the LLM for the ambiguous tail. | small |
-| **`desktidy decorate` (Tahoe folder colors + emoji icons)** | Tag destination folders with colors and emoji (📸 🎬 📥…) via xattrs so an organized Desktop *looks* organized. Feature-flag it: the icon xattr format is observed, not documented — fail soft. | small |
-| **Documented Shortcuts sample automation** | Tahoe's "when file saved to folder → run shortcut" can invoke `desktidy sort-now` — an onboarding path and a nod to power users. | small |
-| **Universal-binary stance** | Tahoe is the last Intel macOS. CLI stays universal (brew builds native). App: universal at launch, arm64-only when the floor moves to macOS 27. | small |
-| **Lock the distribution decision** | DeskTidy cannot be sandboxed (background agent, cross-folder moves) ⇒ Developer ID + hardened runtime + notarized DMG, outside the App Store. Same lane as Hazel. Stop revisiting. | — |
+| **Catch `rateLimited` in smart triage** (F01 — rate-limit claim itself BELIEVED/forum-sourced; defensive catch ships regardless) | FoundationModels rate-limits *background processes on battery* — our launchd agent is one. Catch → degrade to unknown→Inbox → log "AI throttled". Currently an unhandled failure lane. | small |
+| **Vision OCR on screenshots** (F04 — DOCUMENTED; authority per ML policy: suggestions/Level-2 approve by default) | `RecognizeTextRequest` reads each screenshot locally; the text feeds *user-visible deterministic rules* ("contains 'invoice' → Documents") and content-aware rename *suggestions*. ML output feeding deterministic rules keeps the safety story intact. The single highest-value product upgrade available on every macOS 26 Mac. | medium |
+| **NLEmbedding similarity suggestions** (F07 — Level 1 only) | LLM-free second triage engine: embed filename tokens, compare to per-folder centroids. Near-deterministic, no rate limits, no token budget. Better always-on default; reserve the LLM for the ambiguous tail. | small |
+| **`desktidy decorate`** (F28 — DEMOTED to feature-flagged spike: mechanism reverse-engineered, not Apple-documented; xattr round-trip OBSERVED, Finder rendering unverified) | Tag destination folders with colors and emoji (📸 🎬 📥…) via xattrs so an organized Desktop *looks* organized. Feature-flag it: the icon xattr format is observed, not documented — fail soft. | small |
+| **Documented Shortcuts sample automation** (F25 — note the Allow-Running-Scripts opt-in) | Tahoe's "when file saved to folder → run shortcut" can invoke `desktidy sort-now` — an onboarding path and a nod to power users. | small |
+| **Universal-binary stance** (F35 — now verbatim in Apple 26.4 release notes) | Tahoe is the last Intel macOS. CLI stays universal (brew builds native). App: universal at launch, arm64-only when the floor moves to macOS 27. | small |
+| **Lock the distribution decision** (F20 — Apple-documented + DTS-confirmed) | DeskTidy cannot be sandboxed (background agent, cross-folder moves) ⇒ Developer ID + hardened runtime + notarized DMG, outside the App Store. Same lane as Hazel. Stop revisiting. | — |
 
 ## The menu-bar app spec (what the $19 product now is)
 
@@ -57,8 +71,10 @@ Born-Tahoe native, in adoption order:
 4. **App Intents suite** (the keystone above) + `UndoableIntent` + interactive
    snippets.
 5. **Core Spotlight donation** of move-log entries — "where did my file go?"
-   answered from Spotlight itself. Lexical donation only in marketing; the
-   semantic flag ships quietly (documented unreliability).
+   answered from Spotlight itself (F16, DOCUMENTED for lexical donation).
+   *Corrected:* LLM/semantic search over donations is a macOS-27-cycle
+   capability, not Tahoe; the semantic-instability reports are forum-sourced
+   (BELIEVED). Ship lexical; probe semantic; market neither until observed.
 6. **Finder Quick Action** — right-click any file anywhere: "File this with
    DeskTidy." Extends the engine beyond the watch folder with zero new
    watchers; same log, same undo.
@@ -66,6 +82,9 @@ Born-Tahoe native, in adoption order:
    mtime — known Tahoe stale-thumbnail report).
 8. **ClassifyImageRequest visual rules** — user-authored, threshold-gated,
    clearly ML-labeled ("images classified `receipt` ≥0.8 → Documents/Scans").
+   Ships only as an **ML-policy Level 3** rule: off by default, separately
+   enabled, provenance in every receipt, deterministic fallback (see
+   [`ML_AUTHORITY_POLICY.md`](ML_AUTHORITY_POLICY.md)).
 9. **@Generable guided generation** for triage in the app build (typed
    `{category enum, confidence, reason}` — the enum makes inventing a folder
    impossible). The CLI keeps the macro-free pipe format — that split is
