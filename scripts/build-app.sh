@@ -21,6 +21,7 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/Config.swift" \
   "$REPO/src/Paths.swift" \
   "$REPO/src/TargetResolver.swift" \
+  "$REPO/src/NativeConfigParser.swift" \
   "$REPO/src/ProductIdentity.swift" \
   "$REPO/src/Authority.swift" \
   "$REPO/src/Receipts.swift" \

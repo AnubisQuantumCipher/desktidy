@@ -7,6 +7,9 @@
   `--effective-state`, requested-but-invalid launchd fixtures fail closed,
   product identity is centralized without widening the accepted self set.
   Native `config.json` is a reader/model only — nothing writes it yet.
+  Schema-1 native config is parsed from raw UTF-8 with a strict object
+  parser; duplicate keys (including escaped-equivalent spellings) fail
+  closed and do not fall through.
 
 ## Unreleased (branch r1a/public-trust-surface)
 

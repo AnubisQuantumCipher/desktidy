@@ -156,6 +156,7 @@ final class R1ATests {
         }
 
         runTargetResolutionGates()
+        runDuplicateKeyGates()
         runPathParityGates()
         runLaunchdFixtureGates()
         runIdentityGates()
@@ -355,6 +356,137 @@ final class R1ATests {
             check("T11", "malformed sort plist refuses instead of env fallback",
                   report.overall == .ambiguous && report.targetSource == TargetSource.installedPlist.rawValue,
                   "got \(report.overall.rawValue) source=\(report.targetSource): \(report.overallReason)")
+        }
+    }
+
+    /// Public binary --effective-state --json under an isolated fixture world.
+    private func publicState(_ f: Fixture, configBytes: Data) -> EffectiveStateReport? {
+        try! configBytes.write(to: f.app.appendingPathComponent("config.json"))
+        let stateFile = applyFixtureEnv(f)
+        defer { clearFixtureEnv() }
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: binaryPath)
+        p.arguments = ["--effective-state", "--json"]
+        var env = ProcessInfo.processInfo.environment
+        env["DESKTIDY_AGENTS_DIR"] = f.agents.path
+        env["DESKTIDY_TARGET_DIR"] = f.target.path
+        env["DESKTIDY_APP_DIR"] = f.app.path
+        env["DESKTIDY_LAUNCHD_STATE_FILE"] = stateFile.path
+        p.environment = env
+        let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
+        do { try p.run(); p.waitUntilExit() } catch { return nil }
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        return try? JSONDecoder().decode(EffectiveStateReport.self, from: data)
+    }
+
+    private func runDuplicateKeyGates() {
+        func world(_ name: String) -> Fixture {
+            Fixture(name: name, expected: .ambiguous,
+                    agents: tempDir("agents"), states: [:],
+                    target: tempDir("target"), app: tempDir("app"))
+        }
+
+        let a = tempDir("target-a")
+        let b = tempDir("target-b")
+
+        // D01: duplicate target keys, different values — public file/parser boundary.
+        do {
+            let f = world("dupe-target-diff")
+            let raw = Data("{\"schema\":1,\"target\":\"\(a.path)\",\"target\":\"\(b.path)\"}".utf8)
+            let report = publicState(f, configBytes: raw)
+            check("D01", "duplicate target keys (different values) → invalid",
+                  report?.overall == .ambiguous && report?.targetResolution == "invalid"
+                    && report?.targetSource == TargetSource.nativeConfig.rawValue,
+                  "got \(report?.overall.rawValue ?? "nil") res=\(report?.targetResolution ?? "nil") src=\(report?.targetSource ?? "nil") target=\(report?.watchedTarget ?? "nil")")
+        }
+
+        // D02: duplicate target keys, identical values still fail closed.
+        do {
+            let f = world("dupe-target-same")
+            let raw = Data("{\"schema\":1,\"target\":\"\(a.path)\",\"target\":\"\(a.path)\"}".utf8)
+            let report = publicState(f, configBytes: raw)
+            check("D02", "duplicate target keys (identical values) → invalid",
+                  report?.overall == .ambiguous && report?.targetResolution == "invalid",
+                  "got \(report?.overall.rawValue ?? "nil") res=\(report?.targetResolution ?? "nil")")
+        }
+
+        // D03: duplicate schema keys.
+        do {
+            let f = world("dupe-schema")
+            let raw = Data("{\"schema\":1,\"schema\":1,\"target\":\"\(a.path)\"}".utf8)
+            let report = publicState(f, configBytes: raw)
+            check("D03", "duplicate schema keys → invalid",
+                  report?.overall == .ambiguous && report?.targetResolution == "invalid",
+                  "got \(report?.overall.rawValue ?? "nil")")
+        }
+
+        // D04: escaped-equivalent duplicate key target / targ\u0065t.
+        do {
+            let f = world("dupe-escaped")
+            let raw = Data("{\"schema\":1,\"target\":\"\(a.path)\",\"targ\\u0065t\":\"\(b.path)\"}".utf8)
+            let report = publicState(f, configBytes: raw)
+            check("D04", "escaped-equivalent duplicate target key → invalid",
+                  report?.overall == .ambiguous && report?.targetResolution == "invalid",
+                  "got \(report?.overall.rawValue ?? "nil") target=\(report?.watchedTarget ?? "nil")")
+        }
+
+        // D05: leading/trailing whitespace around a valid object is accepted.
+        do {
+            let f = world("ws-valid")
+            let raw = Data("  \n{\"schema\":1,\"target\":\"\(a.path)\"}\n  ".utf8)
+            let report = publicState(f, configBytes: raw)
+            check("D05", "leading/trailing whitespace valid baseline",
+                  report?.targetResolution == "resolved" && report?.targetSource == "nativeConfig"
+                    && report?.watchedTarget == a.path,
+                  "got \(report?.targetResolution ?? "nil") target=\(report?.watchedTarget ?? "nil")")
+        }
+
+        // D06: trailing non-whitespace after the object is rejected.
+        do {
+            let f = world("trailing-junk")
+            let raw = Data("{\"schema\":1,\"target\":\"\(a.path)\"} true".utf8)
+            let report = publicState(f, configBytes: raw)
+            check("D06", "trailing non-whitespace rejected",
+                  report?.overall == .ambiguous && report?.targetResolution == "invalid",
+                  "got \(report?.overall.rawValue ?? "nil") res=\(report?.targetResolution ?? "nil")")
+        }
+
+        // D07: valid schema-1 baseline still resolves.
+        do {
+            let f = world("schema1-ok")
+            let raw = Data("{\"schema\":1,\"target\":\"\(a.path)\"}".utf8)
+            let report = publicState(f, configBytes: raw)
+            check("D07", "valid schema-1 baseline still resolves",
+                  report?.targetResolution == "resolved" && report?.targetSource == "nativeConfig"
+                    && report?.watchedTarget == a.path,
+                  "got \(report?.targetResolution ?? "nil") target=\(report?.watchedTarget ?? "nil")")
+        }
+
+        // D08: engine no-move witness for duplicate-key config.
+        do {
+            let f = world("engine-dupe")
+            let raw = Data("{\"schema\":1,\"target\":\"\(a.path)\",\"target\":\"\(b.path)\"}".utf8)
+            try! raw.write(to: f.app.appendingPathComponent("config.json"))
+            let witness = f.target.appendingPathComponent("stay.pdf")
+            fm.createFile(atPath: witness.path, contents: Data("x".utf8))
+            try? fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)], ofItemAtPath: witness.path)
+            let stateFile = applyFixtureEnv(f)
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: binaryPath)
+            p.arguments = []
+            var env = ProcessInfo.processInfo.environment
+            env["DESKTIDY_AGENTS_DIR"] = f.agents.path
+            env["DESKTIDY_TARGET_DIR"] = f.target.path
+            env["DESKTIDY_APP_DIR"] = f.app.path
+            env["DESKTIDY_LAUNCHD_STATE_FILE"] = stateFile.path
+            p.environment = env
+            p.standardOutput = Pipe(); p.standardError = Pipe()
+            try? p.run(); p.waitUntilExit()
+            clearFixtureEnv()
+            let stayed = fm.fileExists(atPath: witness.path)
+            check("D08", "engine refuses duplicate-key config (exit 3, no move)",
+                  p.terminationStatus == 3 && stayed,
+                  "exit=\(p.terminationStatus) stayed=\(stayed)")
         }
     }
 

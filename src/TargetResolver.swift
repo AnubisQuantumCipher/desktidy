@@ -94,38 +94,12 @@ enum TargetResolver {
         guard let data = fm.contents(atPath: url.path) else {
             return .failed("native config exists but is unreadable", nil)
         }
-        guard let obj = try? JSONSerialization.jsonObject(with: data),
-              let dict = obj as? [String: Any] else {
-            return .failed("native config is malformed or not a JSON object", nil)
+        switch NativeConfigParser.parse(data) {
+        case .ok(let path):
+            return .ok(path)
+        case .failed(let reason):
+            return .failed(reason, nil)
         }
-        if dict["schema"] == nil {
-            return .failed("native config missing schema", nil)
-        }
-        let schema: Int?
-        if let i = dict["schema"] as? Int { schema = i }
-        else if let n = dict["schema"] as? NSNumber { schema = n.intValue }
-        else { return .failed("native config schema has the wrong field type", nil) }
-        guard schema == nativeSchema else {
-            return .failed("native config unknown schema", nil)
-        }
-        if let alt = dict["watchedTarget"] {
-            if let altStr = alt as? String, let t = dict["target"] as? String, altStr != t {
-                return .failed("native config has duplicate/ambiguous target fields", nil)
-            }
-            if !(alt is String) {
-                return .failed("native config has duplicate/ambiguous target fields", nil)
-            }
-        }
-        guard let target = dict["target"] else {
-            return .failed("native config missing target", nil)
-        }
-        guard let path = target as? String else {
-            return .failed("native config target has the wrong field type", nil)
-        }
-        if path.isEmpty {
-            return .failed("native config target is empty", path)
-        }
-        return .ok(path)
     }
 
     private static func readPlistTarget(_ url: URL, fm: FileManager) -> PlistRead {
