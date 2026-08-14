@@ -1,20 +1,15 @@
 import Foundation
 
 // Sacrificial operator probe. Default is read-only plan/status.
-// Mutation requires --register or --unregister plus a one-time auth file
-// that survives MutationInterlock. Phase 1A does not create a live token
-// and automated tests do not execute this binary's mutation path.
+// Phase 1A.1: measure evidence, prepare a sealed grant, then STOP.
+// Does not construct ProductionSMAdapter or invoke mutation methods.
 @main
 struct SacrificialProbe {
     static func main() {
         let args = CommandLine.arguments
-        if args.contains("--help") || args.count == 1 {
+        if args.contains("--help") || args.count == 1 || args.contains("--plan") || args.contains("--status") {
             print(planText())
-            exit(0)
-        }
-        if args.contains("--plan") || args.contains("--status") {
-            print(planText())
-            print("mode: read-only")
+            if args.contains("--plan") || args.contains("--status") { print("mode: read-only") }
             exit(0)
         }
         let registering = args.contains("--register")
@@ -32,46 +27,77 @@ struct SacrificialProbe {
             exit(2)
         }
         let authPath = args[idx + 1]
-        guard let data = FileManager.default.contents(atPath: authPath) else {
-            fputs("probe: authorization file unreadable\n", stderr)
-            exit(2)
-        }
-
-        // Interlock first. Production adapter is constructed only after a
-        // permit decision — still not invoked unless grant exists.
-        let desktop = AuthorityGuard.canonicalize(
-            FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop").path)
-        let ctx = InterlockContext(
-            isSacrificialProbeExecutable: true,
-            requestedOperation: registering ? .register : .unregister,
-            plistName: SacrificialIdentity.hypothesizedPlistName,
-            actualBundleSHA256: SacrificialIdentity.bundleSHA256Placeholder,
-            actualSourceCommit: SacrificialIdentity.sourceCommitPlaceholder,
-            now: Date(),
-            usedNonces: [],
-            foreignOverlap: false,
-            desktopCanonical: desktop,
-            sacrificialExists: true
-        )
-        switch MutationInterlock.evaluate(authData: data, context: ctx) {
-        case .refuse(let reason):
-            fputs("probe: interlock refused — \(reason)\n", stderr)
+        switch SecureAuthFile.openOnce(path: authPath) {
+        case .refused(let r):
+            fputs("probe: \(r)\n", stderr)
             exit(3)
-        case .permit:
-            fputs("probe: interlock would permit, but Phase 1A harness will not invoke the production mutator\n", stderr)
-            exit(4)
+        case .ok(let authBytes):
+            guard let exe = Bundle.main.executableURL ?? URL(fileURLWithPath: CommandLine.arguments[0]) as URL? else {
+                fputs("probe: cannot locate running executable\n", stderr)
+                exit(3)
+            }
+            switch ProbeIdentity.measureRunning(executableURL: exe, bundle: Bundle.main) {
+            case .refused(let r):
+                fputs("probe: \(r)\n", stderr)
+                exit(3)
+            case .ok(let identity):
+                switch ProtectedRootInventory.load() {
+                case .failed(let r):
+                    fputs("probe: \(r)\n", stderr)
+                    exit(3)
+                case .ok(let inv):
+                    guard case .ok(let parsed) = MutationInterlock.parseAuthorization(authBytes) else {
+                        fputs("probe: authorization parse failed\n", stderr)
+                        exit(3)
+                    }
+                    let first = ProductionAuthoritySnapshot.live.snapshot(rootPath: parsed.sacrificialRoot)
+                    let second = ProductionAuthoritySnapshot.live.snapshot(rootPath: parsed.sacrificialRoot)
+                    guard case .ok(let a1) = first, case .ok(let a2) = second else {
+                        fputs("probe: sacrificial root/authority observation failed\n", stderr)
+                        exit(3)
+                    }
+                    let home = AuthorityGuard.canonicalize(FileManager.default.homeDirectoryForCurrentUser.path)
+                    switch MutationBoundary.prepare(
+                        authBytes: authBytes,
+                        identity: identity,
+                        compiledSourceCommit: CompiledProbeIdentity.sourceCommit,
+                        operation: registering ? .register : .unregister,
+                        first: a1, second: a2,
+                        desktop: inv.desktop, home: home,
+                        protected: inv.protected, productionTarget: inv.production
+                    ) {
+                    case .refused(let r):
+                        fputs("probe: interlock refused — \(r)\n", stderr)
+                        exit(3)
+                    case .prepared(let grant):
+                        print("GRANT_PREPARED")
+                        print("operation=\(grant.operation.rawValue)")
+                        print("executableSHA256=\(grant.executableSHA256)")
+                        print("sourceCommit=\(grant.sourceCommit)")
+                        print("root=\(grant.rootCanonical)")
+                        print("nonce=\(grant.nonce)")
+                        print("STOP_BEFORE_PRODUCTION_ADAPTER")
+                        print("ledger_constructions=\(ProductionMutationLedger.constructions)")
+                        print("ledger_registers=\(ProductionMutationLedger.registerInvocations)")
+                        exit(4)
+                    }
+                }
+            }
         }
     }
 
     static func planText() -> String {
         """
         DeskTidy sacrificial SMAppService probe (NON-PRODUCTION)
-        Default: read-only plan. No registration in Phase 1A.
+        Phase 1A.1 seals measurement and grant preparation only.
+        Default: read-only plan. No registration in Phase 1A.1.
+        A future Phase 1B requires a reviewed patch connecting the sealed
+        grant to exactly one adapter call, plus separate architect authorization.
         Hypothesized plist name: \(SacrificialIdentity.hypothesizedPlistName)
         Hypothesized label: \(SacrificialIdentity.hypothesizedLabel) (UNOBSERVED)
         Bundle id: \(SacrificialIdentity.bundleID)
+        Compiled source commit: \(CompiledProbeIdentity.sourceCommit)
         Ad-hoc signing only — not Developer ID / not notarized.
-        Mutation later requires a Phase 1B one-time authorization file.
         """
     }
 }
@@ -80,6 +106,4 @@ enum SacrificialIdentity {
     static let bundleID = "com.desktidy.sacrificial-probe"
     static let hypothesizedPlistName = "com.desktidy.sacrificial.plist"
     static let hypothesizedLabel = "com.desktidy.sacrificial"
-    static let bundleSHA256Placeholder = String(repeating: "00", count: 32)
-    static let sourceCommitPlaceholder = "0b11c652e364cf47668ba87b4228a0f4ab7974ec"
 }

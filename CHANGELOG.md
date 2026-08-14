@@ -2,6 +2,15 @@
 
 ## Unreleased (branch r1b/phase1a-smappservice-harness — stacked on Phase 0, non-final)
 
+- **R1B Phase 1A.1 (measured evidence seal, still no live mutation):** the
+  sacrificial probe builds `InterlockContext` from measured executable
+  SHA-256, compiled 40-hex source commit, one-open authorization bytes,
+  two root/authority observations, and a durable `O_CREAT|O_EXCL` nonce.
+  A sealed `PreparedMutationGrant` is produced then the probe exits 4
+  (`STOP_BEFORE_PRODUCTION_ADAPTER`) with a zero construction/call ledger.
+  Production adapter methods exist but return fail-closed and do not call
+  `SMAppService.register` / `.unregister`. Phase 1B still requires a
+  reviewed connection patch plus separate architect authorization.
 - **R1B Phase 1A (fake-substrate only):** sacrificial SMAppService harness —
   migration state machine, injectable fake adapter, multi-factor mutation
   interlock, simulated transaction/rollback matrix, non-production probe

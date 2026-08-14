@@ -15,6 +15,12 @@ fail_if() {
 fail_if "$ROOT/src/Phase1ATests.swift" 'ProductionSMAdapter|SMAppService' \
   "test file mentions production ServiceManagement mutator"
 
+fail_if "$ROOT/src/Phase1A1Tests.swift" 'ProductionSMAdapter|SMAppService' \
+  "phase1a1 tests mention production ServiceManagement mutator"
+
+fail_if "$ROOT/probe/ProbeMain.swift" 'ProductionSMAdapter\(|requestRegister\(|requestUnregister\(' \
+  "probe connects prepared grant to production mutator"
+
 fail_if "$ROOT/scripts/build-probe.sh" 'SMAppService\.register|launchctl (bootstrap|bootout|kickstart)' \
   "probe build script contains registration/launchd mutation"
 

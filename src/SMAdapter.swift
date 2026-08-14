@@ -61,6 +61,17 @@ final class UnavailableSMAdapter: ServiceManagementAdapting {
     func requestUnregister(plistName: String) -> Result<Void, SMAdapterError> { .failure(.unavailable) }
 }
 
+enum ProductionMutationLedger {
+    static var constructions = 0
+    static var registerInvocations = 0
+    static var unregisterInvocations = 0
+    static func reset() {
+        constructions = 0
+        registerInvocations = 0
+        unregisterInvocations = 0
+    }
+}
+
 enum SMAdapterSelection {
     /// Automated tests and the CLI harness may only obtain a fake or unavailable adapter.
     static func forAutomatedTests() -> FakeSMAdapter { FakeSMAdapter() }

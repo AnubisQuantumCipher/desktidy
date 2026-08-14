@@ -6,10 +6,42 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-OUT="${1:-$REPO/build}"
+OUT="$REPO/build"
+INJECTED_COMMIT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --identity-commit)
+      INJECTED_COMMIT="${2:-}"
+      shift 2 ;;
+    *)
+      OUT="$1"
+      shift ;;
+  esac
+done
+
+if [ -n "$INJECTED_COMMIT" ]; then
+  COMMIT="$INJECTED_COMMIT"
+else
+  if [ -n "$(git -C "$REPO" status --porcelain)" ]; then
+    echo "build-probe: refusing dirty worktree (no injected test identity)" >&2
+    exit 2
+  fi
+  COMMIT="$(git -C "$REPO" rev-parse HEAD)"
+fi
+if ! printf '%s' "$COMMIT" | grep -Eq '^[0-9a-f]{40}$'; then
+  echo "build-probe: source commit must be a 40-hex SHA (got '$COMMIT')" >&2
+  exit 2
+fi
+
 APP="$OUT/DeskTidySacrificialProbe.app"
 MACOS_MIN="14.0"
-mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Library/LaunchAgents" "$APP/Contents/Resources"
+GEN="$OUT/GeneratedProbeIdentity.swift"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Library/LaunchAgents" "$APP/Contents/Resources" "$OUT"
+cat > "$GEN" <<EOF
+enum CompiledProbeIdentity {
+    static let sourceCommit = "$COMMIT"
+}
+EOF
 
 xcrun swiftc -O -parse-as-library \
   -target "arm64-apple-macosx$MACOS_MIN" \
@@ -25,7 +57,13 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/StrictJSONObject.swift" \
   "$REPO/src/SMAdapter.swift" \
   "$REPO/src/MutationInterlock.swift" \
+  "$REPO/src/SecureAuthFile.swift" \
+  "$REPO/src/DurableNonceStore.swift" \
+  "$REPO/src/ProbeIdentity.swift" \
+  "$REPO/src/MutationBoundary.swift" \
+  "$REPO/src/ProductionEvidence.swift" \
   "$REPO/probe/SMAdapterProduction.swift" \
+  "$GEN" \
   "$REPO/probe/ProbeMain.swift" \
   -o "$APP/Contents/MacOS/DeskTidySacrificialProbe"
 

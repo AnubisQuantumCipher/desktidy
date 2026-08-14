@@ -1,11 +1,25 @@
 # Phase 1B Operator Runbook — Sacrificial SMAppService Observation
 
-_Not authorized by Phase 1A. Do not run the mutation path until the architect
-issues a separate visible Phase 1B authorization._
+Phase 1A.1 seals measurement and grant preparation only. Authorization
+alone is **not** the next step.
 
-Phase 1A built the harness. This document is the human procedure for one
-later register/unregister round-trip on a **sacrificial root**. Fake-substrate
-tests are not that observation.
+Phase 1B still requires:
+
+1. a reviewed minimal patch connecting the sealed `PreparedMutationGrant` to
+   exactly one production adapter call;
+2. separate architect authorization for that patch and the observation.
+
+Do not run a real mutation path until both exist. Fake-substrate tests are
+not that observation.
+
+Token creation must use the **measured probe executable SHA-256** and the
+**compiled 40-hex source commit** from the built probe (`--plan` prints the
+commit). Nonce reservations are durable and non-reusable under the
+sacrificial support root. Foreign/protected-root evidence is measured twice.
+
+Runtime label, Login Items string, status semantics, FDA/TCC, reboot/login,
+and Apple distribution remain **unknown**. No automatic production
+self-label widening.
 
 ## Non-claims (Apple membership)
 

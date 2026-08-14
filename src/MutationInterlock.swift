@@ -31,6 +31,8 @@ struct InterlockContext: Equatable {
     var foreignOverlap: Bool
     var desktopCanonical: CanonicalPath
     var sacrificialExists: Bool
+    var authorityUninspectable: Bool = false
+    var dualDeskTidyPresence: Bool = false
 }
 
 enum InterlockDecision: Equatable {
@@ -114,6 +116,8 @@ enum MutationInterlock {
             if auth.expiry <= context.now { return .refuse("authorization expired") }
             if context.usedNonces.contains(auth.nonce) { return .refuse("authorization nonce reused") }
             if context.foreignOverlap { return .refuse("foreign mover on sacrificial root") }
+            if context.authorityUninspectable { return .refuse("authority evidence uninspectable") }
+            if context.dualDeskTidyPresence { return .refuse("dual DeskTidy presence") }
             if !context.sacrificialExists { return .refuse("sacrificial root missing") }
             let rootCanon = AuthorityGuard.canonicalize(auth.sacrificialRoot)
             if rootsEquivalent(rootCanon, context.desktopCanonical) {
