@@ -23,6 +23,7 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/TargetResolver.swift" \
   "$REPO/src/NativeConfigParser.swift" \
   "$REPO/src/ProductIdentity.swift" \
+  "$REPO/src/ServiceIdentity.swift" \
   "$REPO/src/Authority.swift" \
   "$REPO/src/Receipts.swift" \
   "$REPO/src/EffectiveState.swift" \

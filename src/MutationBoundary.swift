@@ -67,11 +67,25 @@ enum PrecallTransactionLog {
         defer { close(fd) }
         let iso = ISO8601DateFormatter()
         iso.formatOptions = [.withInternetDateTime]
-        let line = "\(grant.nonce) \(grant.operation.rawValue) \(grant.executableSHA256) \(grant.sourceCommit) \(grant.authorizationDigest) \(iso.string(from: Date()))\n"
+        let tid = SacrificialMutationDispatcher.transactionID(for: grant)
+        let line = "\(tid) \(grant.nonce) \(grant.operation.rawValue) \(grant.executableSHA256) \(grant.sourceCommit) \(grant.authorizationDigest) \(iso.string(from: Date()))\n"
         let bytes = Array(line.utf8)
         let written = bytes.withUnsafeBufferPointer { write(fd, $0.baseAddress, $0.count) }
         if written != bytes.count { return .refused("pre-call transaction write failed") }
+        fsync(fd)
         return .recorded
+    }
+
+    static func contains(grant: PreparedMutationGrant) -> Bool {
+        let dest = DurableNonceStore.supportRoot(canonicalSacrificial: grant.rootCanonical)
+            .appendingPathComponent("precall.jsonl")
+        var lst = stat()
+        if lstat(dest.path, &lst) != 0 { return false }
+        if (lst.st_mode & S_IFMT) == S_IFLNK { return false }
+        guard let data = try? Data(contentsOf: dest) else { return false }
+        let tid = SacrificialMutationDispatcher.transactionID(for: grant)
+        let needle = "\(tid) \(grant.nonce) \(grant.operation.rawValue) \(grant.executableSHA256)"
+        return String(decoding: data, as: UTF8.self).contains(needle)
     }
 }
 

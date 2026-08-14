@@ -1,8 +1,9 @@
 import Foundation
 
 // Sacrificial operator probe. Default is read-only plan/status.
-// Phase 1A.1: measure evidence, prepare a sealed grant, then STOP.
-// Does not construct ProductionSMAdapter or invoke mutation methods.
+// A prepared grant still STOPs unless --commit-mutation is present.
+// Hosted CI and the public-boundary suite must not pass that flag
+// with a valid authorization.
 @main
 struct SacrificialProbe {
     static func main() {
@@ -76,10 +77,46 @@ struct SacrificialProbe {
                         print("sourceCommit=\(grant.sourceCommit)")
                         print("root=\(grant.rootCanonical)")
                         print("nonce=\(grant.nonce)")
-                        print("STOP_BEFORE_PRODUCTION_ADAPTER")
+                        print("transactionID=\(SacrificialMutationDispatcher.transactionID(for: grant))")
+                        if !args.contains("--commit-mutation") {
+                            print("STOP_BEFORE_PRODUCTION_ADAPTER")
+                            print("ledger_constructions=\(ProductionMutationLedger.constructions)")
+                            print("ledger_registers=\(ProductionMutationLedger.registerInvocations)")
+                            exit(4)
+                        }
+                        let adapter = ProductionSMAdapter()
+                        let req = SacrificialDispatchRequest(
+                            grant: grant,
+                            requested: grant.operation,
+                            plistName: SacrificialIdentity.hypothesizedPlistName,
+                            liveIdentity: identity,
+                            compiledSourceCommit: CompiledProbeIdentity.sourceCommit,
+                            second: a2
+                        )
+                        let outcome = SacrificialMutationDispatcher.dispatch(req, adapter: adapter)
+                        print("MUTATION_ATTEMPTED")
+                        switch outcome {
+                        case .invoked(let st):
+                            print("dispatch_result=invoked")
+                            print("status=\(st)")
+                        case .refused(let r):
+                            print("dispatch_result=refused")
+                            print("dispatch_error=\(r)")
+                        case .rollbackRequired(let r):
+                            print("dispatch_result=rollbackRequired")
+                            print("dispatch_error=\(r)")
+                        case .indeterminate(let r):
+                            print("dispatch_result=indeterminate")
+                            print("dispatch_error=\(r)")
+                        }
                         print("ledger_constructions=\(ProductionMutationLedger.constructions)")
                         print("ledger_registers=\(ProductionMutationLedger.registerInvocations)")
-                        exit(4)
+                        print("ledger_unregisters=\(ProductionMutationLedger.unregisterInvocations)")
+                        switch outcome {
+                        case .invoked: exit(0)
+                        case .indeterminate, .rollbackRequired: exit(5)
+                        case .refused: exit(3)
+                        }
                     }
                 }
             }
@@ -89,10 +126,10 @@ struct SacrificialProbe {
     static func planText() -> String {
         """
         DeskTidy sacrificial SMAppService probe (NON-PRODUCTION)
-        Phase 1A.1 seals measurement and grant preparation only.
-        Default: read-only plan. No registration in Phase 1A.1.
-        A future Phase 1B requires a reviewed patch connecting the sealed
-        grant to exactly one adapter call, plus separate architect authorization.
+        Default: measure, prepare grant, STOP (exit 4). No adapter construction.
+        Phase 1B observation requires --commit-mutation after a sealed grant.
+        Hosted CI and the public-boundary suite must not pass that flag
+        with a valid authorization.
         Hypothesized plist name: \(SacrificialIdentity.hypothesizedPlistName)
         Hypothesized label: \(SacrificialIdentity.hypothesizedLabel) (UNOBSERVED)
         Bundle id: \(SacrificialIdentity.bundleID)

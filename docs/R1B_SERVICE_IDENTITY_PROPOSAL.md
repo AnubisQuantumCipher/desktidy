@@ -1,7 +1,13 @@
-# R1B Service Identity Proposal — Phase 1 input (NOT APPLIED)
+# R1B Service Identity Registry
 
-_Phase 0 proposal only. The accepted self set remains `com.desktidy.sort` and
-`com.desktidy.notify`. This document does not widen trust._
+The accepted production self set remains `com.desktidy.sort` and
+`com.desktidy.notify`. The sacrificial SMAppService observation on
+2026-08-14 recorded launchd label `com.desktidy.sacrificial` under
+parent bundle `com.desktidy.sacrificial-probe`. That label is **not**
+a production self-label.
+
+Executable catalog: `src/ServiceIdentity.swift`. ProductIdentity
+delegates its accepted self set to that registry.
 
 ## Current accepted identity (Phase 0, executable)
 

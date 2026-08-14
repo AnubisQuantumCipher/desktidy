@@ -53,6 +53,7 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/Config.swift" \
   "$REPO/src/Paths.swift" \
   "$REPO/src/ProductIdentity.swift" \
+  "$REPO/src/ServiceIdentity.swift" \
   "$REPO/src/Authority.swift" \
   "$REPO/src/StrictJSONObject.swift" \
   "$REPO/src/SMAdapter.swift" \
@@ -61,6 +62,7 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/DurableNonceStore.swift" \
   "$REPO/src/ProbeIdentity.swift" \
   "$REPO/src/MutationBoundary.swift" \
+  "$REPO/src/GrantedMutation.swift" \
   "$REPO/src/ProductionEvidence.swift" \
   "$REPO/probe/SMAdapterProduction.swift" \
   "$GEN" \
