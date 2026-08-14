@@ -98,10 +98,19 @@ struct CanonicalEffectiveState {
 }
 
 struct CanonicalMovementHistory {
-    let receipts: [Receipt]
-    let malformedLines: Int
+    let entries: [CanonicalHistoryEntry]
+    let integrity: CanonicalHistoryIntegrity
+    let hasMore: Bool
+
+    var receipts: [Receipt] { entries.map(\.receipt) }
+    var malformedLines: Int {
+        if case .degraded = integrity { return 1 }
+        return 0
+    }
 }
 
+/// Compatibility presentation for callers that only need the receipt and
+/// root-relative destination. New callers use CanonicalWhereDidItGoResult.
 struct CanonicalWhereDidItGo {
     let receipt: Receipt
     let destination: String
@@ -176,6 +185,7 @@ final class CanonicalApplicationCore {
     private let fm: FileManager
     private let pauseURL: URL
     private let commandReceipts: CanonicalCommandReceiptLedger
+    private let historyQuery: CanonicalHistoryQuery
     private let iso: ISO8601DateFormatter
     private let dateNow: () -> Date
     private let monotonicNow: () -> TimeInterval
@@ -335,6 +345,7 @@ final class CanonicalApplicationCore {
         self.configurationStore = configurationStore ?? NativeConfigurationStore(url: nativeConfigURL, fm: fm)
         self.pauseURL = nativeConfigURL.deletingLastPathComponent().appendingPathComponent("pause-state.json")
         self.commandReceipts = CanonicalCommandReceiptLedger(receiptsDirectory: movement.ledger.receiptsDir)
+        self.historyQuery = CanonicalHistoryQuery(ledger: movement.ledger, movement: movement, fm: fm)
         self.dateNow = dateNow
         self.monotonicNow = monotonicNow
         self.bootSessionID = bootSessionID
@@ -449,10 +460,14 @@ final class CanonicalApplicationCore {
 
     func installationStatus() -> CanonicalLifecycleStatus { lifecycleStatusProvider() }
 
-    func history() -> CanonicalMovementHistory {
-        let result = movement.ledger.readAll()
-        return CanonicalMovementHistory(receipts: result.receipts, malformedLines: result.malformedLines)
+    func history(page: Int = 0, limit: Int = CanonicalHistoryQuery.maximumPageSize) -> CanonicalMovementHistory {
+        historyQuery.history(page: page, limit: limit)
     }
+    private func validatedReceiptsForCommand() -> [Receipt]? {
+        guard case .valid(let receipts) = historyQuery.validatedReceipts() else { return nil }
+        return receipts
+    }
+
 
     func commandHistory() -> [CanonicalCommandReceipt] { commandReceipts.readAll() }
 
@@ -460,15 +475,15 @@ final class CanonicalApplicationCore {
     /// Undo button is omitted when a later receipt or filesystem change made
     /// the original movement stale.
     func isUndoEligible(receiptID: String) -> Bool {
-        let receipts = history().receipts
-        guard let original = receipts.last(where: { $0.id == receiptID }) else { return false }
+        guard let receipts = validatedReceiptsForCommand(),
+              let original = receipts.last(where: { $0.id == receiptID }) else { return false }
         return isUndoEligible(original, in: receipts)
     }
 
     /// Reveal is resolved from the receipt through the canonical root, not from
     /// untrusted notification content. The caller owns Finder presentation.
     func revealDestination(receiptID: String) -> URL? {
-        guard let receipt = history().receipts.last(where: { $0.id == receiptID }),
+        guard let receipt = validatedReceiptsForCommand()?.last(where: { $0.id == receiptID }),
               receipt.outcome == "moved" || receipt.outcome == "recovered" else {
             return nil
         }
@@ -483,17 +498,17 @@ final class CanonicalApplicationCore {
         return destination
     }
 
+    /// The structured result is intentionally distinct from the legacy
+    /// optional wrapper: callers can tell an unsafe request, degraded ledger,
+    /// changed artifact, and absence of evidence apart.
+    func whereDidItGoResult(named name: String) -> CanonicalWhereDidItGoResult {
+        historyQuery.whereDidItGo(named: name)
+    }
+
     func whereDidItGo(named name: String) -> CanonicalWhereDidItGo? {
-        guard !name.isEmpty else { return nil }
-        for receipt in history().receipts.reversed() {
-            let source = URL(fileURLWithPath: receipt.sourceRel).lastPathComponent
-            let destination = (receipt.finalDestRel ?? receipt.plannedDestRel)
-            let destinationName = URL(fileURLWithPath: destination).lastPathComponent
-            if source == name || destinationName == name {
-                return CanonicalWhereDidItGo(receipt: receipt, destination: destination)
-            }
-        }
-        return nil
+        let result = whereDidItGoResult(named: name)
+        guard let receipt = result.receipt, let destination = result.destination else { return nil }
+        return CanonicalWhereDidItGo(receipt: receipt, destination: destination)
     }
 
     // MARK: Mutating commands
@@ -620,8 +635,8 @@ final class CanonicalApplicationCore {
             guard movement.ledger.verifyChain() == nil else {
                 return refused(command: .undo, reason: .invalidReceipt(receiptID))
             }
-            let receipts = history().receipts
-            guard let original = receipts.last(where: { $0.id == receiptID }),
+            guard let receipts = validatedReceiptsForCommand(),
+                  let original = receipts.last(where: { $0.id == receiptID }),
                   isUndoEligible(original, in: receipts) else {
                 return refused(command: .undo, reason: .invalidReceipt(receiptID))
             }
@@ -648,7 +663,7 @@ final class CanonicalApplicationCore {
                 emit(CanonicalCoreEvent(kind: .movementCompleted, command: .undo,
                                         receiptID: moved.id,
                                         message: "undo completed for \(original.sourceRel)"))
-                if history().receipts.contains(where: { $0.id == moved.id && ($0.outcome == "moved" || $0.outcome == "recovered") }) {
+                if validatedReceiptsForCommand()?.contains(where: { $0.id == moved.id && ($0.outcome == "moved" || $0.outcome == "recovered") }) == true {
                     movementCompleted(moved)
                 }
             }
@@ -865,7 +880,7 @@ final class CanonicalApplicationCore {
                 emit(CanonicalCoreEvent(kind: .movementCompleted, command: .tidyNow,
                                         receiptID: receipt.id,
                                         message: "moved \(receipt.sourceRel) to \(receipt.finalDestRel ?? receipt.plannedDestRel)"))
-                if history().receipts.contains(where: { $0.id == receipt.id && ($0.outcome == "moved" || $0.outcome == "recovered") }) {
+                if validatedReceiptsForCommand()?.contains(where: { $0.id == receipt.id && ($0.outcome == "moved" || $0.outcome == "recovered") }) == true {
                     movementCompleted(receipt)
                 }
             } else {

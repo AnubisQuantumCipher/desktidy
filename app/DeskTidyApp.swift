@@ -24,6 +24,7 @@ final class NativeMenuModel: ObservableObject {
     @Published private(set) var configuration: NativeMenuConfiguration
     @Published private(set) var lifecycle: CanonicalLifecycleStatus
     @Published private(set) var lastCommandMessage: String?
+    @Published private(set) var movementHistory: CanonicalMovementHistory
 
     private var core: CanonicalApplicationCore
 
@@ -33,6 +34,7 @@ final class NativeMenuModel: ObservableObject {
         target = .invalid(reason: "Loading target", source: "loading", attemptedPath: nil)
         configuration = .missing
         lifecycle = core.installationStatus()
+        movementHistory = core.history()
         refresh()
     }
 
@@ -41,6 +43,7 @@ final class NativeMenuModel: ObservableObject {
         refreshTarget()
         refreshConfiguration()
         lifecycle = core.installationStatus()
+        movementHistory = core.history()
     }
 
     func setTarget(_ path: String) -> CanonicalCommandResult {
@@ -216,6 +219,7 @@ struct NativeMenuContent: View {
             Divider()
             details
             configuration
+            recentMovement
             if let message = model.lastCommandMessage {
                 Text(message)
                     .font(.system(size: 10.5))
@@ -282,6 +286,37 @@ struct NativeMenuContent: View {
                 Text(report.ledger).gridValue()
             }
         }
+    }
+
+    private var recentMovement: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text("Recent Movement")
+                .font(.system(size: 11, weight: .semibold))
+            switch model.movementHistory.integrity {
+            case .valid:
+                if let entry = model.movementHistory.entries.first {
+                    let original = entry.originalName ?? "Unknown original name"
+                    let final = entry.finalName ?? "Unknown final name"
+                    Text("\(original) → \(final)")
+                        .font(.system(size: 10.5))
+                        .lineLimit(1)
+                    Text("\(entry.category ?? "Unknown category") · \(entry.liveStatus.menuText) · \(entry.undoEligible ? "Undo available" : "Undo unavailable")")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                } else {
+                    Text("No validated movement receipts yet.")
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(.secondary)
+                }
+            case .degraded(let reason):
+                Text("History unavailable: \(reason)")
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     private var configuration: some View {
@@ -434,5 +469,17 @@ private extension Text {
             .textSelection(.enabled)
             .lineLimit(1)
             .truncationMode(.middle)
+    }
+}
+
+private extension CanonicalHistoryLiveStatus {
+    var menuText: String {
+        switch self {
+        case .present: return "Current item verified"
+        case .missing: return "Item no longer at recorded destination"
+        case .changed: return "Recorded destination changed"
+        case .unknown: return "Current item cannot be verified"
+        case .invalidDestination: return "Recorded destination is unsafe"
+        }
     }
 }

@@ -99,6 +99,11 @@ struct Receipt: Codable {
     static let outcomes: Set<String> = ["prepared", "moved", "failed", "recovered", "indeterminate"]
 }
 
+enum ReceiptLedgerValidation {
+    case valid([Receipt])
+    case invalid(String)
+}
+
 enum MoveError: Error, CustomStringConvertible {
     case confinement(String)
     case prepareFailed(String)
