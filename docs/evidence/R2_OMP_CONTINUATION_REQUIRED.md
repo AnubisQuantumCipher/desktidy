@@ -33,3 +33,26 @@ git push -u origin r2/full-local-native-completion-omp
 ```
 
 Then create exactly one draft stacked PR targeting `r1b/phase1b-sacrificial-observation`. Before Phase B code, write and observe a failing hermetic test for the typed registry; retain fake-only adapters and do not replay the lifecycle.
+
+## OMP continuation update — 2026-08-14
+
+Committed local checkpoints:
+
+- `29efd7a R2 Phase B: seal recoverable migration substrate`
+- `88e6010 R2 Phase C: add canonical application core`
+- `93c6d50 R2 Phase D: add native configuration menu`
+
+Fresh verification before this boundary:
+
+- full pre-Phase-C regression roster passed after `88e6010`;
+- Phase C gates: `6 passed, 0 failed`, including stale undo-receipt replay protection;
+- native bundle build passed at `/private/tmp/desktidy-phase-d-app/DeskTidy.app`;
+- hermetic `foreignConflict` `--smoke` passed; the no-fixture smoke isolation guard passed.
+
+Uncommitted Phase-D configuration work is intentionally not a checkpoint:
+
+- `src/NativeConfigParser.swift`, `src/CanonicalApplicationCore.swift`, `src/DeskTidy.swift`, and `scripts/build-app.sh` modified;
+- `src/NativeConfiguration.swift`, `src/NativeConfigurationStore.swift`, and `src/PhaseDTests.swift` untracked;
+- current compile succeeds, but `--phased-test` is red only at `D03`: schema-1 migration returns `protected or symlinked root` for a hermetic `/private/tmp/.../app` store.
+
+Do not claim Phase D complete. Next action: root-cause the false protected/symlink classification in `NativeConfigurationStore.prepareRoot()` / `noSymlink(_:)` using the `D03` fixture, fix it, re-run `--phased-test`, then rebuild and smoke the app before committing the configuration slice. Preserve all non-live constraints and do not push.
