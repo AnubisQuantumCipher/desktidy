@@ -9,6 +9,14 @@
   zero ledger. Ungranted overloads stay disconnected. Hosted CI does not
   run the observation. Production self-labels are unchanged. Ad-hoc
   signing remains development evidence only.
+- **Local sacrificial observation (2026-08-14, commit `4725c51`):**
+  register returned `success` / `status=enabled`; `launchctl print`
+  showed `com.desktidy.sacrificial` submitted by ServiceManagement
+  (`parent bundle identifier=com.desktidy.sacrificial-probe`, helper
+  not running). Unregister returned `notRegistered` and print rc 113.
+  Personal movers stayed loaded. Transcript:
+  `docs/evidence/R1B_PHASE1B_SACRIFICIAL_OBSERVATION.md`. Login Items
+  string, FDA/TCC, and reboot/login were not observed.
 
 ## Unreleased (branch r1b/phase1a-smappservice-harness — stacked on Phase 0, non-final)
 
