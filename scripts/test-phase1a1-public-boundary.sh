@@ -243,6 +243,11 @@ else
   FAIL=$((FAIL + 1))
 fi
 
+# --commit-mutation without auth still requires --auth-file
+expect P33 2 "$PROBE" --register --commit-mutation
+# --commit-mutation with missing auth refuses before adapter
+expect P34 3 "$PROBE" --register --commit-mutation --auth-file "$AUTHDIR/missing.json"
+
 # missing auth already P02/P03
 # production ledger: valid grant printed constructions=0
 if "$PROBE" --register --auth-file "$GOOD" 2>/dev/null | grep -q 'STOP_BEFORE_PRODUCTION_ADAPTER'; then
@@ -265,7 +270,7 @@ else
 fi
 
 # required IDs
-REQ="P01 P02 P03 P04 P05 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18 P19 P20 P21 P22 P23 P24 P25 P26 P27 P28 P29 P32"
+REQ="P01 P02 P03 P04 P05 P06 P07 P08 P09 P10 P11 P12 P13 P14 P15 P16 P17 P18 P19 P20 P21 P22 P23 P24 P25 P26 P27 P28 P29 P32 P33 P34"
 for id in $REQ; do
   echo "${SEEN[*]}" | grep -qw "$id" || { echo "FAIL: missing expected ID $id"; FAIL=$((FAIL + 1)); }
 done

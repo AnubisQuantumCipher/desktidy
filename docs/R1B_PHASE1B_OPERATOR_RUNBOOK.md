@@ -92,9 +92,20 @@ Mutation (Phase 1B only):
 …/DeskTidySacrificialProbe --unregister --auth-file /path/to/unreg.json
 ```
 
-Phase 1A's probe **refuses to invoke** the production mutator even if the
-interlock would permit (exit 4). Phase 1B replaces that stop with the single
-granted adapter call.
+Without `--commit-mutation` those commands still stop at exit 4.
+
+Phase 1A.1's probe still **refuses to invoke** the production mutator even
+if the interlock would permit (exit 4). Phase 1B adds an explicit second
+factor: `--commit-mutation`. Hosted CI and the public-boundary suite must
+not pass that flag with a valid authorization.
+
+```text
+…/DeskTidySacrificialProbe --register --auth-file /path/to/auth.json --commit-mutation
+…/DeskTidySacrificialProbe --unregister --auth-file /path/to/unreg.json --commit-mutation
+```
+
+Ungranted `requestRegister`/`requestUnregister` stay disconnected. Only the
+grant-accepting overloads call `SMAppService.register` / `.unregister`.
 
 ## Exact readbacks after a real grant
 

@@ -109,6 +109,7 @@ jobs:
           ./scripts/test-phase1a-wiring.sh
           ./build/desktidy-sort --phase1a-test
           ./build/desktidy-sort --phase1a1-test
+          ./build/desktidy-sort --phase1b-test
           chmod +x scripts/test-phase1a1-public-boundary.sh
           ./scripts/test-phase1a1-public-boundary.sh
           ./scripts/build-probe.sh build

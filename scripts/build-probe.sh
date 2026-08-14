@@ -61,6 +61,7 @@ xcrun swiftc -O -parse-as-library \
   "$REPO/src/DurableNonceStore.swift" \
   "$REPO/src/ProbeIdentity.swift" \
   "$REPO/src/MutationBoundary.swift" \
+  "$REPO/src/GrantedMutation.swift" \
   "$REPO/src/ProductionEvidence.swift" \
   "$REPO/probe/SMAdapterProduction.swift" \
   "$GEN" \
