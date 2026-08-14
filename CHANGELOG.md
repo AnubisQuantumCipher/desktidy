@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased (branch r1a/public-trust-surface)
+
+- **Experimental menu-bar app (read-only trust surface):** build from source
+  with `scripts/build-app.sh`. Shows watched folder, effective movement
+  authority, agent state, and receipt-ledger health — derived from launchd
+  evidence and ledger verification via the same `EffectiveState` model the CLI
+  prints with `desktidy-sort --effective-state [--json]`. Conflict, ambiguity,
+  and ledger damage always render fail-closed; a plist on disk is never
+  treated as "running". Read-only actions only (reveal folder/receipts, copy
+  diagnostic). Not packaged, not shipped.
+- **Docs truth pass:** README no longer implies an Undo command exists, and
+  the roadmap no longer proposes automatic model-authorized moves.
+
 ## v1.2.0 — R0: single movement authority + canonical receipts
 
 - **Authority guard:** DeskTidy now refuses to sort a folder that another

@@ -36,7 +36,7 @@ untitled-2.xyz                  📁 Inbox   ← anything it's unsure about
 - **It waits before touching a file** (15s by default), so it never grabs something mid-download or mid-save.
 - **The AI never moves anything.** The optional smart pass writes suggestions to a file. You decide.
 - **Nothing leaves your Mac.** No servers, no telemetry, no network. The AI is Apple's on-device model.
-- **Every move is logged**, so you can always see (and undo) exactly what happened.
+- **Every move leaves a receipt.** A hash-chained, crash-recoverable ledger records each move's exact final path (`desktidy-sort --history`), so you can always see — and manually reverse — exactly what happened. A one-click Undo command is planned, not shipped.
 
 ---
 
@@ -186,9 +186,13 @@ records every final path; subfolders (including `Inbox/`) are never re-sorted;
 
 ## Roadmap
 
-- Menu-bar app with pause/resume and a live activity feed.
+- Menu-bar app: an **experimental read-only status surface exists** (build it
+  from source with `scripts/build-app.sh` — it shows the watched folder,
+  movement authority, and receipt-ledger health, and refuses to claim
+  "running" under any conflict or ambiguity). Pause/resume, activity feed,
+  and notifications are still to come; it is not shipped or packaged.
 - Per-folder rules and user-defined categories via a JSON config (no rebuild).
-- Optional "smart move" mode that acts on high-confidence AI suggestions (opt-in).
+- Suggestion previews you can approve in one click — per the [ML authority policy](docs/ML_AUTHORITY_POLICY.md), model output never moves files on its own; approval stays human.
 - Homebrew tap for one-line install.
 
 ## Contributing
