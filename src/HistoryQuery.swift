@@ -44,6 +44,9 @@ struct CanonicalWhereDidItGoResult {
     let status: CanonicalWhereDidItGoStatus
     let receipt: Receipt?
     let destination: String?
+    /// A presentation-safe category derived by the canonical query. Unlike
+    /// destination, this is not a relative path and can cross a system intent boundary.
+    let category: String?
 }
 
 final class CanonicalHistoryQuery {
@@ -86,24 +89,25 @@ final class CanonicalHistoryQuery {
 
     func whereDidItGo(named rawName: String) -> CanonicalWhereDidItGoResult {
         guard let name = safeName(rawName) else {
-            return CanonicalWhereDidItGoResult(status: .invalidQuery, receipt: nil, destination: nil)
+            return CanonicalWhereDidItGoResult(status: .invalidQuery, receipt: nil, destination: nil, category: nil)
         }
         guard case .valid(let receipts) = validatedReceipts() else {
-            return CanonicalWhereDidItGoResult(status: .ledgerUnavailable, receipt: nil, destination: nil)
+            return CanonicalWhereDidItGoResult(status: .ledgerUnavailable, receipt: nil, destination: nil, category: nil)
         }
         guard let receipt = receipts.reversed().first(where: { searchable($0, matches: name) }) else {
-            return CanonicalWhereDidItGoResult(status: .noEvidence, receipt: nil, destination: nil)
+            return CanonicalWhereDidItGoResult(status: .noEvidence, receipt: nil, destination: nil, category: nil)
         }
         let destination = receipt.finalDestRel
+        let category = destination.flatMap(categoryComponent(of:))
         switch liveStatus(for: receipt) {
         case .present:
-            return CanonicalWhereDidItGoResult(status: .moved, receipt: receipt, destination: destination)
+            return CanonicalWhereDidItGoResult(status: .moved, receipt: receipt, destination: destination, category: category)
         case .missing:
-            return CanonicalWhereDidItGoResult(status: .movedElsewhere, receipt: receipt, destination: destination)
+            return CanonicalWhereDidItGoResult(status: .movedElsewhere, receipt: receipt, destination: destination, category: category)
         case .changed:
-            return CanonicalWhereDidItGoResult(status: .changed, receipt: receipt, destination: destination)
+            return CanonicalWhereDidItGoResult(status: .changed, receipt: receipt, destination: destination, category: category)
         case .unknown, .invalidDestination:
-            return CanonicalWhereDidItGoResult(status: .noEvidence, receipt: nil, destination: nil)
+            return CanonicalWhereDidItGoResult(status: .noEvidence, receipt: nil, destination: nil, category: nil)
         }
     }
 

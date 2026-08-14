@@ -143,14 +143,22 @@ final class DeskTidyApplicationBoundary: ObservableObject {
 
     init(coreFactory: @escaping () -> CanonicalApplicationCore) {
         self.coreFactory = coreFactory
-        model = NativeMenuModel(core: coreFactory())
+        let core = coreFactory()
+        model = NativeMenuModel(core: core)
+        installIntentBridge(for: core)
     }
 
     func setTarget(_ path: String) {
         let result = model.setTarget(path)
         guard result.outcome == .completed, result.refusal == nil else { return }
         let message = model.lastCommandMessage
-        model.replaceCore(with: coreFactory(), retaining: message)
+        let replacement = coreFactory()
+        installIntentBridge(for: replacement)
+        model.replaceCore(with: replacement, retaining: message)
+    }
+
+    private func installIntentBridge(for core: CanonicalApplicationCore) {
+        DeskTidyIntentBridge.shared.install(adapter: CanonicalIntentAdapter(core: core))
     }
 }
 
