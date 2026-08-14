@@ -145,6 +145,8 @@ final class CanonicalApplicationCore {
     let movement: MovementService
 
     private let nativeConfigURL: URL
+    private let configurationStore: NativeConfigurationStore
+
     private let targetResolver: () -> TargetResolution
     private let effectiveStateProvider: () -> EffectiveStateReport
     private let lifecycleStatusProvider: () -> CanonicalLifecycleStatus
@@ -163,7 +165,8 @@ final class CanonicalApplicationCore {
         lifecycleStatus: @escaping () -> CanonicalLifecycleStatus,
         authorize: @escaping (CanonicalCoreAuthorizationRequest) -> CanonicalCoreAuthorization,
         emit: @escaping (CanonicalCoreEvent) -> Void = { _ in },
-        fm: FileManager = .default
+        fm: FileManager = .default,
+        configurationStore: NativeConfigurationStore? = nil
     ) {
         self.movement = movement
         self.nativeConfigURL = nativeConfigURL
@@ -173,6 +176,7 @@ final class CanonicalApplicationCore {
         self.authorize = authorize
         self.emit = emit
         self.fm = fm
+        self.configurationStore = configurationStore ?? NativeConfigurationStore(url: nativeConfigURL, fm: fm)
         self.pauseURL = nativeConfigURL.deletingLastPathComponent().appendingPathComponent("pause-state.json")
         self.commandReceipts = CanonicalCommandReceiptLedger(receiptsDirectory: movement.ledger.receiptsDir)
         let formatter = ISO8601DateFormatter()
@@ -241,9 +245,21 @@ final class CanonicalApplicationCore {
 
     func target() -> TargetResolution { targetResolver() }
 
+    /// Typed configuration read for native UI/settings consumers. This is a
+    /// read-only operation unless a caller explicitly asks the store to migrate.
+    func configuration() -> NativeConfigurationStoreResult {
+        configurationStore.load()
+    }
+
+    func configurationReceipts() -> [NativeConfigurationOperationReceipt] {
+        configurationStore.receipts()
+    }
+
     func targetConfiguration() -> NativeConfigParser.Outcome? {
-        guard let data = fm.contents(atPath: nativeConfigURL.path) else { return nil }
-        return NativeConfigParser.parse(data)
+        guard fm.fileExists(atPath: nativeConfigURL.path) else { return nil }
+        let result = configurationStore.load()
+        if let configuration = result.configuration { return .ok(target: configuration.target) }
+        return .failed(result.failure ?? "native config is unreadable")
     }
 
     func receiptsDirectory() -> URL { movement.ledger.receiptsDir }
@@ -288,13 +304,12 @@ final class CanonicalApplicationCore {
         let requested = AuthorityGuard.canonicalize(standardized).path
         let current = currentResolvedTargetPath()
         return execute(command: .setTarget, currentTarget: current, requestedTarget: requested) {
-            let object: [String: Any] = ["schema": TargetResolver.nativeSchema, "target": requested]
-            let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
-            try self.fm.createDirectory(at: self.nativeConfigURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: self.nativeConfigURL, options: [.atomic])
-            try self.fm.setAttributes([.posixPermissions: 0o600], ofItemAtPath: self.nativeConfigURL.path)
-            try self.sync(self.nativeConfigURL)
-            try self.sync(self.nativeConfigURL.deletingLastPathComponent())
+            let currentConfiguration = self.configurationStore.load().configuration
+                ?? NativeConfiguration.defaultV2(target: requested)
+            let saved = self.configurationStore.save(currentConfiguration.withTarget(requested))
+            guard saved.configuration != nil else {
+                throw CocoaError(.fileWriteUnknown)
+            }
         }
     }
 
