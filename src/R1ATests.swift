@@ -156,6 +156,9 @@ final class R1ATests {
         }
 
         runTargetResolutionGates()
+        runPathParityGates()
+        runLaunchdFixtureGates()
+        runIdentityGates()
 
         print("R1A GATES: \(passCount) passed, \(failCount) failed")
         return failCount == 0
@@ -352,6 +355,193 @@ final class R1ATests {
             check("T11", "malformed sort plist refuses instead of env fallback",
                   report.overall == .ambiguous && report.targetSource == TargetSource.installedPlist.rawValue,
                   "got \(report.overall.rawValue) source=\(report.targetSource): \(report.overallReason)")
+        }
+    }
+
+    private func runPathParityGates() {
+        let f = Fixture(name: "path-parity", expected: .pausedNotLoaded,
+                        agents: tempDir("agents"), states: [:],
+                        target: tempDir("target"), app: tempDir("app"))
+        _ = applyFixtureEnv(f)
+        defer { clearFixtureEnv() }
+        let engine = DeskTidy()
+        let report = EffectiveState.compute()
+        let pathsApp = DeskTidyPaths.appDirectory().path
+        let pathsLedger = DeskTidyPaths.ledgerURL().path
+        let pathsCfg = DeskTidyPaths.nativeConfigURL().path
+        let pathsReceipts = DeskTidyPaths.receiptsDirectory().path
+        check("K01", "engine appDirectory equals DeskTidyPaths",
+              engine.appDirectory.path == pathsApp, "engine=\(engine.appDirectory.path) paths=\(pathsApp)")
+        check("K02", "EffectiveState appDirectory/ledgerPath equal DeskTidyPaths",
+              report.appDirectory == pathsApp && report.ledgerPath == pathsLedger,
+              "report.app=\(report.appDirectory) report.ledger=\(report.ledgerPath)")
+        check("K03", "receipts/config/ledger share one app-support root",
+              pathsLedger.hasPrefix(pathsReceipts) && pathsCfg.hasPrefix(pathsApp)
+                && pathsCfg.hasSuffix("/config.json") && pathsLedger.hasSuffix("/ledger.jsonl"),
+              "cfg=\(pathsCfg) ledger=\(pathsLedger)")
+    }
+
+    private func runLaunchdFixtureGates() {
+        func world() -> Fixture {
+            Fixture(name: "launchd-fixture", expected: .ambiguous,
+                    agents: tempDir("agents"), states: [:],
+                    target: tempDir("target"), app: tempDir("app"))
+        }
+
+        // L01: requested fixture path is absent → explicit ambiguous, not live/notLoaded.
+        do {
+            let f = world()
+            setenv("DESKTIDY_AGENTS_DIR", f.agents.path, 1)
+            setenv("DESKTIDY_TARGET_DIR", f.target.path, 1)
+            setenv("DESKTIDY_APP_DIR", f.app.path, 1)
+            setenv("DESKTIDY_LAUNCHD_STATE_FILE", f.agents.appendingPathComponent("missing-state.json").path, 1)
+            defer { clearFixtureEnv() }
+            let report = EffectiveState.compute()
+            check("L01", "absent launchd fixture file → ambiguous",
+                  report.overall == .ambiguous,
+                  "got \(report.overall.rawValue): \(report.overallReason)")
+        }
+
+        // L02: malformed JSON fixture → ambiguous (public compute/binary path).
+        do {
+            let f = world()
+            let bad = f.agents.appendingPathComponent("state.json")
+            try? Data("[1,2,3]".utf8).write(to: bad)
+            setenv("DESKTIDY_AGENTS_DIR", f.agents.path, 1)
+            setenv("DESKTIDY_TARGET_DIR", f.target.path, 1)
+            setenv("DESKTIDY_APP_DIR", f.app.path, 1)
+            setenv("DESKTIDY_LAUNCHD_STATE_FILE", bad.path, 1)
+            defer { clearFixtureEnv() }
+            let report = EffectiveState.compute()
+            check("L02", "malformed launchd fixture JSON → ambiguous",
+                  report.overall == .ambiguous,
+                  "got \(report.overall.rawValue): \(report.overallReason)")
+        }
+
+        // L03: invalid state value → ambiguous, never notLoaded.
+        do {
+            let f = world()
+            let bad = f.agents.appendingPathComponent("state.json")
+            try? Data(#"{"com.desktidy.sort":"exploded"}"#.utf8).write(to: bad)
+            setenv("DESKTIDY_AGENTS_DIR", f.agents.path, 1)
+            setenv("DESKTIDY_TARGET_DIR", f.target.path, 1)
+            setenv("DESKTIDY_APP_DIR", f.app.path, 1)
+            setenv("DESKTIDY_LAUNCHD_STATE_FILE", bad.path, 1)
+            defer { clearFixtureEnv() }
+            let report = EffectiveState.compute()
+            check("L03", "invalid launchd fixture state value → ambiguous",
+                  report.overall == .ambiguous,
+                  "got \(report.overall.rawValue) agent=\(report.productAgentState): \(report.overallReason)")
+        }
+
+        // L04: valid fixture still hermetic (paused).
+        do {
+            let f = world()
+            let report = modelState(f)
+            check("L04", "valid empty launchd fixture remains pausedNotLoaded",
+                  report.overall == .pausedNotLoaded,
+                  "got \(report.overall.rawValue)")
+        }
+
+        // L05: public binary --effective-state --json on malformed fixture.
+        do {
+            let f = world()
+            let bad = f.agents.appendingPathComponent("state.json")
+            try? Data("not-json".utf8).write(to: bad)
+            let p = Process()
+            p.executableURL = URL(fileURLWithPath: binaryPath)
+            p.arguments = ["--effective-state", "--json"]
+            var env = ProcessInfo.processInfo.environment
+            env["DESKTIDY_AGENTS_DIR"] = f.agents.path
+            env["DESKTIDY_TARGET_DIR"] = f.target.path
+            env["DESKTIDY_APP_DIR"] = f.app.path
+            env["DESKTIDY_LAUNCHD_STATE_FILE"] = bad.path
+            p.environment = env
+            let out = Pipe(); p.standardOutput = out; p.standardError = Pipe()
+            try? p.run(); p.waitUntilExit()
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            let report = try? JSONDecoder().decode(EffectiveStateReport.self, from: data)
+            check("L05", "public binary reports ambiguous for malformed launchd fixture",
+                  p.terminationStatus == 0 && report?.overall == .ambiguous,
+                  "exit=\(p.terminationStatus) overall=\(report?.overall.rawValue ?? "nil")")
+        }
+    }
+
+    private func runIdentityGates() {
+        func world() -> Fixture {
+            Fixture(name: "identity", expected: .pausedNotLoaded,
+                    agents: tempDir("agents"), states: [:],
+                    target: tempDir("target"), app: tempDir("app"))
+        }
+
+        // I01: expected sort label with expected program is self; no conflict.
+        do {
+            let f = world()
+            writePlist(f.agents, label: ProductIdentity.sortLabel, watch: [f.target.path],
+                       program: makeProgram("desktidy-sort"), targetEnv: f.target.path)
+            var ff = f
+            ff = Fixture(name: f.name, expected: .runningHealthy, agents: f.agents,
+                         states: [ProductIdentity.sortLabel: "running"], target: f.target, app: f.app)
+            let report = modelState(ff)
+            check("I01", "expected sort identity remains self/runningHealthy",
+                  report.overall == .runningHealthy && report.effectiveMoverLabel == ProductIdentity.sortLabel,
+                  "got \(report.overall.rawValue) mover=\(report.effectiveMoverLabel ?? "nil")")
+        }
+
+        // I02: expected notify label is self (not foreign) even if sort is absent.
+        do {
+            let f = world()
+            writePlist(f.agents, label: ProductIdentity.notifyLabel, watch: [f.target.path],
+                       program: makeProgram("desktidy-notify"))
+            var ff = f
+            ff = Fixture(name: f.name, expected: .pausedNotLoaded, agents: f.agents,
+                         states: [ProductIdentity.notifyLabel: "running"], target: f.target, app: f.app)
+            let report = modelState(ff)
+            check("I02", "expected notify identity is not a foreign conflict",
+                  report.overall == .pausedNotLoaded && report.foreignMovers.isEmpty,
+                  "got \(report.overall.rawValue) foreign=\(report.foreignMovers)")
+        }
+
+        // I03: foreign label remains foreign.
+        do {
+            let f = world()
+            writePlist(f.agents, label: "com.example.other-mover", watch: [f.target.path],
+                       program: makeProgram("other"))
+            var ff = f
+            ff = Fixture(name: f.name, expected: .foreignConflict, agents: f.agents,
+                         states: ["com.example.other-mover": "running"], target: f.target, app: f.app)
+            let report = modelState(ff)
+            check("I03", "foreign label remains foreign",
+                  report.overall == .foreignConflict && report.foreignMovers.contains("com.example.other-mover"),
+                  "got \(report.overall.rawValue)")
+        }
+
+        // I04: stolen self-label with contradictory executable fails closed.
+        do {
+            let f = world()
+            writePlist(f.agents, label: ProductIdentity.sortLabel, watch: [f.target.path],
+                       program: makeProgram("not-desktidy"), targetEnv: f.target.path)
+            var ff = f
+            ff = Fixture(name: f.name, expected: .foreignConflict, agents: f.agents,
+                         states: [ProductIdentity.sortLabel: "running"], target: f.target, app: f.app)
+            let report = modelState(ff)
+            check("I04", "self label + contradictory program fails closed",
+                  report.overall == .foreignConflict || report.overall == .ambiguous,
+                  "got \(report.overall.rawValue): \(report.overallReason)")
+        }
+
+        // I05: future/unloaded app-agent label is not silently trusted as self.
+        do {
+            let f = world()
+            writePlist(f.agents, label: "com.desktidy.app.sort", watch: [f.target.path],
+                       program: makeProgram("DeskTidy"))
+            var ff = f
+            ff = Fixture(name: f.name, expected: .foreignConflict, agents: f.agents,
+                         states: ["com.desktidy.app.sort": "running"], target: f.target, app: f.app)
+            let report = modelState(ff)
+            check("I05", "future SMAppService label is not accepted as self",
+                  report.overall == .foreignConflict && report.foreignMovers.contains("com.desktidy.app.sort"),
+                  "got \(report.overall.rawValue) foreign=\(report.foreignMovers)")
         }
     }
 

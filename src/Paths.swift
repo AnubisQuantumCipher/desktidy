@@ -57,6 +57,6 @@ enum DeskTidyPaths {
         env: [String: String] = ProcessInfo.processInfo.environment,
         home: URL = FileManager.default.homeDirectoryForCurrentUser
     ) -> URL {
-        agentsDirectory(env: env, home: home).appendingPathComponent("com.desktidy.sort.plist")
+        agentsDirectory(env: env, home: home).appendingPathComponent("\(ProductIdentity.sortLabel).plist")
     }
 }

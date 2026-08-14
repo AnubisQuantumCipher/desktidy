@@ -63,37 +63,68 @@ struct CanonicalPath: Equatable {
 
 final class AuthorityGuard {
     /// DeskTidy's own agent labels — never counted as foreign authorities.
-    static let selfLabels: Set<String> = ["com.desktidy.sort", "com.desktidy.notify"]
+    static let selfLabels: Set<String> = ProductIdentity.selfLabels
 
     let agentsDir: URL
-    private let fixtureStates: [String: String]?   // label -> state, from fixture file
+    private let fixtureStates: [String: String]?   // label -> state, from a valid fixture
+    private let fixtureFailure: String?            // requested fixture was unusable
 
     init() {
         let env = ProcessInfo.processInfo.environment
-        let fm = FileManager.default
-        if let d = env["DESKTIDY_AGENTS_DIR"], !d.isEmpty {
-            agentsDir = URL(fileURLWithPath: (d as NSString).expandingTildeInPath, isDirectory: true)
-        } else {
-            agentsDir = fm.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/LaunchAgents", isDirectory: true)
-        }
-        if let f = env["DESKTIDY_LAUNCHD_STATE_FILE"], !f.isEmpty,
-           let data = fm.contents(atPath: (f as NSString).expandingTildeInPath),
-           let dict = try? JSONDecoder().decode([String: String].self, from: data) {
-            fixtureStates = dict
-        } else if let f = env["DESKTIDY_LAUNCHD_STATE_FILE"], !f.isEmpty {
-            // A fixture was requested but is unreadable: that is itself
-            // ambiguity — surface it rather than silently probing live launchd.
-            fixtureStates = [:]
+        agentsDir = DeskTidyPaths.agentsDirectory()
+        if let f = env["DESKTIDY_LAUNCHD_STATE_FILE"], !f.isEmpty {
+            switch AuthorityGuard.loadFixtureFile((f as NSString).expandingTildeInPath) {
+            case .ok(let dict):
+                fixtureStates = dict
+                fixtureFailure = nil
+            case .failed(let reason):
+                fixtureStates = [:]
+                fixtureFailure = reason
+            }
         } else {
             fixtureStates = nil
+            fixtureFailure = nil
         }
     }
 
-    /// Explicit-injection initializer for tests.
+    /// Explicit-injection initializer for tests (valid fixture or live-nil).
     init(agentsDir: URL, fixtureStates: [String: String]?) {
         self.agentsDir = agentsDir
         self.fixtureStates = fixtureStates
+        self.fixtureFailure = nil
+    }
+
+    enum FixtureFile {
+        case ok([String: String])
+        case failed(String)
+    }
+
+    static func loadFixtureFile(_ path: String) -> FixtureFile {
+        let fm = FileManager.default
+        guard fm.fileExists(atPath: path) else {
+            return .failed("requested launchd fixture is absent")
+        }
+        guard let data = fm.contents(atPath: path) else {
+            return .failed("requested launchd fixture is unreadable")
+        }
+        guard let obj = try? JSONSerialization.jsonObject(with: data) else {
+            return .failed("requested launchd fixture is malformed JSON")
+        }
+        guard let dict = obj as? [String: Any] else {
+            return .failed("requested launchd fixture has the wrong type")
+        }
+        var out: [String: String] = [:]
+        let allowed: Set<String> = ["running", "loaded", "not-loaded"]
+        for (k, v) in dict {
+            guard let s = v as? String else {
+                return .failed("requested launchd fixture has a non-string state")
+            }
+            if !allowed.contains(s) {
+                return .failed("requested launchd fixture has an invalid state value")
+            }
+            out[k] = s
+        }
+        return .ok(out)
     }
 
     // -- canonicalization ----------------------------------------------------
@@ -113,6 +144,7 @@ final class AuthorityGuard {
 
     // -- launchd state -------------------------------------------------------
     private func loadState(label: String, programExists: Bool) -> MoverLoadState {
+        if fixtureFailure != nil { return .uninspectable }
         if let fixtures = fixtureStates {
             switch fixtures[label] {
             case "running":    return .running
@@ -191,7 +223,7 @@ final class AuthorityGuard {
                 watchedPaths: canonWatched.map { $0.path },
                 programPath: program,
                 state: state,
-                isSelf: AuthorityGuard.selfLabels.contains(label)
+                isSelf: ProductIdentity.isSelf(label: label, programPath: program, programExists: programExists)
             ))
         }
         return (records, unreadable)
@@ -199,6 +231,9 @@ final class AuthorityGuard {
 
     // -- decision ------------------------------------------------------------
     func evaluate(rootPath: String) -> AuthorityDecision {
+        if let fixtureFailure {
+            return .ambiguous(reason: fixtureFailure, records: [])
+        }
         let root = AuthorityGuard.canonicalize(rootPath)
         let (records, unreadable) = relevantMovers(for: root)
 

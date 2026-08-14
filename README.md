@@ -186,18 +186,21 @@ records every final path; subfolders (including `Inbox/`) are never re-sorted;
 
 ## Roadmap
 
-- Menu-bar app: an **experimental read-only status surface exists** (build it
-  from source with `scripts/build-app.sh` — it shows the watched folder,
-  movement authority, and receipt-ledger health, and refuses to claim
-  "running" under any conflict or ambiguity). Pause/resume, activity feed,
-  and notifications are still to come; it is not shipped or packaged.
+- Menu-bar app: an **experimental read-only status surface exists** on the
+  R1A/R1B source branches (build it with `scripts/build-app.sh`). It is not
+  packaged, not in the Homebrew formula, and not a public release. Pause/resume,
+  activity feed, and notifications are still to come.
 - Per-folder rules and user-defined categories via a JSON config (no rebuild).
 - Suggestion previews you can approve in one click — per the [ML authority policy](docs/ML_AUTHORITY_POLICY.md), model output never moves files on its own; approval stays human.
-- Homebrew tap for one-line install.
+- Homebrew tap (`anubisquantumcipher/tap/desktidy`) already exists; the
+  published formula remains **v1.1.2** and does **not** install R0 receipts,
+  R1A, or R1B. This source tree is experimental and unmerged.
 
 ## Contributing
 
-Issues and PRs welcome. The whole thing is ~650 lines of Swift plus three small shell scripts — easy to read and hack on. Run `desktidy-sort --self-test` after changes.
+Issues and PRs welcome. The sorter, receipts, and tests are a small Swift
+tree plus a few shell scripts — read `src/` rather than trusting a line
+count. Run `desktidy-sort --self-test` after changes.
 
 ## License
 

@@ -47,6 +47,8 @@ struct EffectiveStateReport: Codable {
     var targetExists: Bool
     var targetSource: String               // nativeConfig | installedPlist | environment | defaultDesktop
     var targetResolution: String           // resolved | invalid
+    var appDirectory: String
+    var ledgerPath: String
     var productAgentLoaded: Bool
     var productAgentState: String          // running | loadedIdle | notLoaded | stale | uninspectable
     var effectiveMoverLabel: String?       // provable mover of this root, if any
@@ -101,7 +103,7 @@ enum EffectiveState {
         let selfRecord: MoverRecord?
         if invalidReason == nil {
             let (records, _) = guardian.relevantMovers(for: AuthorityGuard.canonicalize(target))
-            selfRecord = records.first { $0.isSelf && $0.label == "com.desktidy.sort" }
+            selfRecord = records.first { $0.isSelf && $0.label == ProductIdentity.sortLabel }
         } else {
             selfRecord = nil
         }
@@ -131,7 +133,7 @@ enum EffectiveState {
                 moverLabel = live.label; moverProgram = live.programPath
             }
         case .sole, .soleWithStale:
-            if productLoaded { moverLabel = "com.desktidy.sort"; moverProgram = selfRecord?.programPath }
+            if productLoaded { moverLabel = ProductIdentity.sortLabel; moverProgram = selfRecord?.programPath }
         case .ambiguous:
             break   // unprovable — leave nil rather than guess
         }
@@ -194,6 +196,8 @@ enum EffectiveState {
             targetExists: targetExists,
             targetSource: targetSource,
             targetResolution: invalidReason == nil ? "resolved" : "invalid",
+            appDirectory: appDir.path,
+            ledgerPath: ledger.ledgerURL.path,
             productAgentLoaded: productLoaded,
             productAgentState: productState.rawValue,
             effectiveMoverLabel: moverLabel,
