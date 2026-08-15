@@ -8,9 +8,10 @@ history described an earlier plan and is not current product evidence.
 
 ## Current position
 
-The current artifact is an ad-hoc Apple Silicon macOS 14+ local release
-candidate verified on disposable fixture roots. It is not a public installer,
-Homebrew release, Developer ID-signed/notarized app, or live payment offer.
+The current artifact is an ad-hoc Apple Silicon macOS 14+ local deployment,
+operational and rollback-backed on the operator Mac. It is not a public native
+installer, current Homebrew native release, Developer ID-signed/notarized app,
+or live payment offer.
 
 The repository's defensible technical boundary is narrower:
 
@@ -18,9 +19,9 @@ The repository's defensible technical boundary is narrower:
   fixtures;
 - receipts are unkeyed integrity evidence, not authentication;
 - suggestions are non-mutating;
-- live Desktop operation, service registration, Login Items/FDA/TCC,
-  reboot/login, native visual/accessibility, and no-network binary auditing
-  remain unverified or indeterminate as recorded in `docs/evidence/`.
+- the recorded migration and named canary establish current local Desktop
+  operation, while Login Items, reboot/login, complete keyboard/VoiceOver, and
+  no-network binary auditing remain unverified or indeterminate.
 
 No launch, price, waitlist, conversion, or sales metric should be inferred from
 this source. Any future public positioning must follow an independently

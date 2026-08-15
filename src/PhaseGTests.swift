@@ -128,6 +128,7 @@ final class PhaseGTests {
         runSymlinkEscapeContract()
         runABACycleProtectionContract()
         runProcessLockContract()
+        runHostileProcessLockPathContract()
         runLegacyRootCompatibilityContract()
         print("PHASE G GATES: \(pass) passed, \(fail) failed")
         return pass > 0 && fail == 0
@@ -410,6 +411,35 @@ final class PhaseGTests {
             blocked.refusal == .movementBusy
                 && completed.outcome == .completed
                 && fm.contents(atPath: f.root.appendingPathComponent("serialized.pdf").path) == bytes
+        )
+    }
+
+    private func runHostileProcessLockPathContract() {
+        let sandbox = temporaryDirectory("hostile-process-lock")
+        defer { try? fm.removeItem(at: sandbox) }
+        let target = sandbox.appendingPathComponent("do-not-touch")
+        let lockURL = sandbox.appendingPathComponent("desktidy.lock")
+        let bytes = Data("protected target".utf8)
+        fm.createFile(atPath: target.path, contents: bytes,
+                      attributes: [.posixPermissions: 0o644])
+        try? fm.createSymbolicLink(at: lockURL, withDestinationURL: target)
+
+        let hostile = MovementProcessLock(url: lockURL)
+        let refused: Bool
+        do {
+            try hostile.acquire()
+            refused = false
+        } catch MovementProcessLockError.unavailable {
+            refused = true
+        } catch {
+            refused = false
+        }
+        let permissions = (try? fm.attributesOfItem(atPath: target.path)[.posixPermissions] as? NSNumber)?
+            .uint16Value
+        check(
+            "G15",
+            "movement lock refuses a symbolic-link path without changing its target",
+            refused && fm.contents(atPath: target.path) == bytes && permissions == 0o644
         )
     }
 

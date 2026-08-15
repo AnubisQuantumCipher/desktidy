@@ -1,6 +1,7 @@
 #!/bin/bash
-# DeskTidy installer. Compiles locally, installs two launchd agents, and guides
-# the one-time Full Disk Access grant. Safe to re-run (it just rebuilds/reloads).
+# Legacy source installer. It stages and verifies the candidate before replacing
+# any live executable, installs two launchd agents, and guides the one-time Full
+# Disk Access grant. The native local-RC lifecycle remains the current R2 path.
 #
 #   ./install.sh                 # organize your Desktop (default)
 #   ./install.sh --target ~/Downloads   # organize a different folder instead
@@ -11,6 +12,9 @@ APPDIR="$HOME/Library/Application Support/DeskTidy"
 LA="$HOME/Library/LaunchAgents"
 UID_NUM="$(id -u)"
 TARGET="$HOME/Desktop"
+STAGE=""
+cleanup() { [ -z "$STAGE" ] || rm -rf "$STAGE"; }
+trap cleanup EXIT
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -39,20 +43,25 @@ if ! xcrun --find swiftc >/dev/null 2>&1; then
 fi
 ok "Swift toolchain present"
 
-mkdir -p "$APPDIR" "$LA"
+mkdir -p "$LA"
 
-# 2) build (FoundationModels/AI path auto-included only on macOS 26+ SDKs)
-say "Building…"
-xcrun swiftc -O -parse-as-library "$SCRIPT_DIR"/src/*.swift -o "$APPDIR/desktidy-sort"
-codesign -s - -i com.desktidy.sort "$APPDIR/desktidy-sort" >/dev/null 2>&1 || true
-ok "Built and signed: $APPDIR/desktidy-sort"
+# 2) build into an isolated staging directory. A failed compile, self-test, or
+# authority check must not replace the currently installed movement binary.
+STAGE="$(mktemp -d /private/tmp/desktidy-install.XXXXXX)"
+STAGED_BIN="$STAGE/desktidy-sort"
+STAGED_APP="$STAGE/app-support"
+mkdir -p "$STAGED_APP"
+say "Building and verifying staged candidate…"
+xcrun swiftc -O -parse-as-library "$SCRIPT_DIR"/src/*.swift -o "$STAGED_BIN"
+codesign -s - -i com.desktidy.sort "$STAGED_BIN" >/dev/null 2>&1 || true
+ok "Built and signed staged candidate"
 
 # 3) self-test — refuse to install a broken build
-if "$APPDIR/desktidy-sort" --self-test >/dev/null 2>&1; then ok "Self-test passed"
+if DESKTIDY_APP_DIR="$STAGED_APP" "$STAGED_BIN" --self-test >/dev/null 2>&1; then ok "Self-test passed"
 else echo "Self-test FAILED — aborting install."; exit 1; fi
 
 # 3b) R0 authority guard — never install a second mover onto a watched root
-if ! DESKTIDY_TARGET_DIR="$TARGET" "$APPDIR/desktidy-sort" --authority-check; then
+if ! DESKTIDY_TARGET_DIR="$TARGET" DESKTIDY_APP_DIR="$STAGED_APP" "$STAGED_BIN" --authority-check; then
   echo
   echo "Another movement authority owns this folder (details above)."
   echo "DeskTidy fails closed rather than double-sorting a root. Choose a"
@@ -60,6 +69,12 @@ if ! DESKTIDY_TARGET_DIR="$TARGET" "$APPDIR/desktidy-sort" --authority-check; th
   exit 2
 fi
 ok "Movement authority clear for this root"
+
+mkdir -p "$APPDIR"
+cp "$STAGED_BIN" "$APPDIR/.desktidy-sort.new"
+chmod 755 "$APPDIR/.desktidy-sort.new"
+mv -f "$APPDIR/.desktidy-sort.new" "$APPDIR/desktidy-sort"
+ok "Installed verified candidate: $APPDIR/desktidy-sort"
 
 # 4) notifier + clickable-banner dependency (optional)
 cp "$SCRIPT_DIR/src/desktidy-notify.sh" "$APPDIR/desktidy-notify.sh"; chmod +x "$APPDIR/desktidy-notify.sh"

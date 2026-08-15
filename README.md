@@ -70,7 +70,8 @@ evidence only.
 - One canonical movement authority; foreign, ambiguous, invalid-target, or
   damaged-ledger state refuses movement.
 - One cross-process movement lock serializes watcher, Tidy Now, and Undo
-  transactions. Concurrent movement does not race receipt reconciliation.
+  transactions. It refuses symbolic links, non-regular objects, foreign-owned
+  files, and hard-linked lock inodes before changing permissions or locking.
 - Deterministic routes and collision-safe names; no overwrite path.
 - Append-only receipt records with SHA-256 chaining, crash reconciliation, and
   bounded history/Undo queries. The chain is unkeyed integrity evidence, not

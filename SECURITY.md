@@ -4,9 +4,10 @@
 
 DeskTidy is presently an ad-hoc, local Apple Silicon macOS 14+ release
 candidate. It is not Developer ID signed, notarized, publicly released, or a
-supported Homebrew distribution. No claim in this policy establishes a live
-Desktop, service-registration, permission, reboot/login, or network-audit
-result.
+supported native Homebrew distribution. The operator-Mac deployment and named
+canary establish only the bounded local evidence recorded in
+`docs/evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md`; they do not establish
+reboot/login behavior, public-distribution safety, or a no-network binary audit.
 
 The repository's fixture contracts exercise a guarded movement core. Their
 model is intentionally narrow:
@@ -18,6 +19,8 @@ model is intentionally narrow:
 - malformed, foreign, ambiguous, and unavailable authority inputs refuse;
 - optional suggestions have no authority to move, rename, delete, upload, or
   otherwise mutate files.
+- movement lock files are opened no-follow and verified as single-link regular
+  files owned by the current user before permissions or locking are applied.
 
 These are source/fixture boundaries, not a promise about an installed public
 product. A no-network binary audit has not been recorded for this RC. Future

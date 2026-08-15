@@ -9,14 +9,16 @@ current public website, installer, waitlist, CI result, or release.
 ## Current source statement
 
 - `website/` is repository source only. This phase did not deploy it.
-- The website source now directs readers to the repository's local-RC evidence
-  instead of presenting a Homebrew installation or public product availability.
-- The current DeskTidy artifact is an ad-hoc arm64 macOS 14+ local RC built and
-  tested on fixture roots. It is not Developer ID signed, notarized, or
-  Gatekeeper-accepted public distribution.
-- Native visual/accessibility evidence is indeterminate. Live Desktop,
-  ServiceManagement, Login Items, FDA/TCC, reboot/login, and no-network binary
-  audit results are not established by this website source.
+- The website source now directs readers to the repository's local-deployment
+  evidence instead of presenting a Homebrew installation or public product
+  availability.
+- The current DeskTidy artifact is an ad-hoc arm64 macOS 14+ local deployment,
+  operational and rollback-backed on the operator Mac. It is not Developer ID
+  signed, notarized, or Gatekeeper-accepted public distribution.
+- The unused historical waitlist form, API route, and Neon dependency are
+  removed. This source exposes no email-collection endpoint.
+- Complete keyboard/VoiceOver, Login Items, reboot/login, public-distribution,
+  and no-network binary-audit results remain outside this website's claims.
 
 ## Historical report boundary
 

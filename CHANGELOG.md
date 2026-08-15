@@ -16,6 +16,10 @@
   sweeps preserve the exact latest durable Undo restoration; damaged-ledger
   startup fails closed. The named live canary completed a stable actual-core
   A→B→A cycle and was removed only after its evidence was recorded.
+- The movement lock now opens no-follow, verifies a current-user-owned regular
+  single-link inode, and has a hostile symbolic-link regression control.
+- The inactive website waitlist/API and Neon dependency were removed; website
+  and privacy copy now match the bounded local-deployment evidence.
 - The installed arm64 macOS 14+ app remains ad-hoc signed. Gatekeeper rejection
   is expected. Developer ID signing, notarization, TestFlight/App Store, public
   release, and Homebrew update remain absent.
