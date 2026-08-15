@@ -1,5 +1,35 @@
 # Changelog
 
+## Unreleased — R2 local native RC (not a public release)
+
+- The authorized local migration replaced the active personal Desktop sorter
+  with `com.desktidy.sort` and `com.desktidy.notify`, persisted native config,
+  removed old active registration plists, and retained byte-verified rollback
+  assets. Direct state is `SOLE` / `runningHealthy`; this is a local deployment,
+  not a public release.
+- Migration transaction controls now cover 10 cases, including bound prior
+  support backup/restore, missing unrelated WatchPaths, process-exact
+  quiescence, old-plist removal, and rollback after partial shutdown.
+- Routing policy v2 restores the exact five-root Desktop contract: `Archive`,
+  `Docs`, `Inbox`, `Media`, and `Projects`. Documents, screenshots, other media,
+  archives, code, and dropped folders route only beneath those roots. Nested
+  receipt recovery/history paths retain traversal and symlink confinement.
+- Watcher, Tidy Now, and Undo share one cross-process movement lock. Automatic
+  sweeps preserve the exact latest durable Undo restoration; damaged-ledger
+  startup fails closed. The named live canary completed a stable actual-core
+  A→B→A cycle and was removed only after its evidence was recorded.
+- The movement lock now opens no-follow, verifies a current-user-owned regular
+  single-link inode, and has a hostile symbolic-link regression control.
+- The inactive website waitlist/API and Neon dependency were removed; website
+  and privacy copy now match the bounded local-deployment evidence.
+- The installed arm64 macOS 14+ app remains ad-hoc signed. Gatekeeper rejection
+  is expected. A source-built Homebrew developer preview exists; Developer ID
+  signing, notarization, TestFlight/App Store, and a supported public production
+  release remain absent.
+- Direct pixels and AX controls exist, but keyboard focus traversal and spoken
+  VoiceOver output remain **INDETERMINATE**. Historical sacrificial evidence
+  does not prove Login Items, FDA/TCC, reboot, or login behavior.
+
 ## Unreleased (branch r1b/phase1b-sacrificial-observation — stacked on Phase 1A.1, non-final)
 
 - **R1B Phase 1B (sacrificial observation path):** the sealed
@@ -82,7 +112,7 @@
 
 ## v1.0.0
 
-First public release.
+Historical changelog entry; not evidence of a current public release.
 
 - Deterministic Desktop sorter (`desktidy-sort`): files loose items into
   Documents / Images / Screenshots / Videos / Audio / Archives / Code / Folders,

@@ -1,9 +1,17 @@
-# R1B Service Identity Proposal — Phase 1 input (NOT APPLIED)
+# R1B Service Identity Proposal — historical design input
 
-_Phase 0 proposal only. The accepted self set remains `com.desktidy.sort` and
-`com.desktidy.notify`. This document does not widen trust._
+This proposal predates the R2 typed registry. The executable source of truth is
+`src/ProductIdentity.swift`; its legacy sorter/notifier identities are accepted,
+the menu app is bundle-only, the app-agent identity is planned/unaccepted, and
+the observed sacrificial identity is non-production. None of those source
+models authorizes a live registration or establishes production migration.
 
-## Current accepted identity (Phase 0, executable)
+The retained proposal below explains the original acceptance boundary. It does
+not widen trust and does not turn the historical sacrificial observation into
+Login Items, FDA/TCC, reboot, or login proof.
+
+
+## Historical accepted identity
 
 | Role | Label | Expected program basename |
 |---|---|---|

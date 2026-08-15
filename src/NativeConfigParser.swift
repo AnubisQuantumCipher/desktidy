@@ -18,7 +18,27 @@ enum NativeConfigParser {
         case failed(String)
     }
 
+    struct ConfigurationOutcome: Equatable {
+        let configuration: NativeConfiguration?
+        let failure: String?
+    }
+
+    /// Parses both the legacy target-only document and schema 2.  TargetResolver
+    /// continues to consume the target-only outcome below, preserving its
+    /// fail-closed precedence model.
+    static func parseConfiguration(_ data: Data) -> ConfigurationOutcome {
+        NativeConfigurationCodec.parse(data)
+    }
+
     static func parse(_ data: Data) -> Outcome {
+        let parsed = parseConfiguration(data)
+        if let configuration = parsed.configuration {
+            return .ok(target: configuration.target)
+        }
+        return parseSchema1(data)
+    }
+
+    private static func parseSchema1(_ data: Data) -> Outcome {
         guard let text = String(data: data, encoding: .utf8) else {
             return .failed("native config is not valid UTF-8")
         }

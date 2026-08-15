@@ -4,9 +4,8 @@
 #
 #   scripts/build-app.sh [output-dir]     # default: build/
 #
-# The app compiles the SHARED state sources (Config, Authority, Receipts,
-# EffectiveState) plus app/DeskTidyApp.swift — the same truth the CLI prints
-# via `desktidy-sort --effective-state`.
+# The app links the canonical product API and its shared state dependencies.
+# DeskTidy.swift is deliberately excluded: it is the CLI executable entrypoint.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,18 +13,70 @@ OUT="${1:-$REPO/build}"
 APP="$OUT/DeskTidy.app"
 MACOS_MIN="14.0"
 
+refuse_desktop_target() {
+  local target desktop
+  target="$(/usr/bin/python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).expanduser().resolve(strict=False))
+PY
+)"
+  desktop="$(/usr/bin/python3 - "$HOME/Desktop" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).expanduser().resolve(strict=False))
+PY
+)"
+  case "$target" in
+    "$desktop"|"$desktop"/*)
+      echo "build: refusing Desktop target; use a non-Desktop build directory" >&2
+      exit 2
+      ;;
+  esac
+}
+
+refuse_desktop_target "$OUT"
+SOURCE_COMMIT_OVERRIDE="${DESKTIDY_SOURCE_COMMIT:-}"
+if git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if ! git -C "$REPO" diff --quiet || ! git -C "$REPO" diff --cached --quiet; then
+    echo "build: refusing a dirty source tree; commit the exact local RC source first" >&2
+    exit 2
+  fi
+  SOURCE_COMMIT="$(git -C "$REPO" rev-parse --verify HEAD^{commit})"
+  if [ -n "$SOURCE_COMMIT_OVERRIDE" ] && [ "$SOURCE_COMMIT_OVERRIDE" != "$SOURCE_COMMIT" ]; then
+    echo "build: supplied source commit does not match checkout HEAD" >&2
+    exit 2
+  fi
+else
+  printf '%s\n' "$SOURCE_COMMIT_OVERRIDE" | grep -Eq '^[0-9a-f]{40}$' || {
+    echo "build: a 40-hex DESKTIDY_SOURCE_COMMIT is required for an archive source build" >&2
+    exit 2
+  }
+  SOURCE_COMMIT="$SOURCE_COMMIT_OVERRIDE"
+fi
+
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+MIGRATION="$APP/Contents/Resources/Migration"
+mkdir -p "$MIGRATION"
 
 xcrun swiftc -O -parse-as-library \
   -target "arm64-apple-macosx$MACOS_MIN" \
   "$REPO/src/Config.swift" \
   "$REPO/src/Paths.swift" \
+  "$REPO/src/MovementProcessLock.swift" \
   "$REPO/src/TargetResolver.swift" \
   "$REPO/src/NativeConfigParser.swift" \
+  "$REPO/src/NativeConfiguration.swift" \
+  "$REPO/src/NativeConfigurationStore.swift" \
   "$REPO/src/ProductIdentity.swift" \
   "$REPO/src/Authority.swift" \
   "$REPO/src/Receipts.swift" \
   "$REPO/src/EffectiveState.swift" \
+  "$REPO/src/HistoryQuery.swift" \
+  "$REPO/src/CanonicalApplicationCore.swift" \
+  "$REPO/src/IntentAdapter.swift" \
+  "$REPO/src/ReceiptNotifications.swift" \
+  "$REPO/app/DeskTidyIntents.swift" \
   "$REPO/app/DeskTidyApp.swift" \
   -o "$APP/Contents/MacOS/DeskTidy"
 
@@ -40,6 +91,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>com.desktidy.app</string>
     <key>CFBundleName</key><string>DeskTidy</string>
     <key>CFBundleExecutable</key><string>DeskTidy</string>
+    <key>CFBundleIconFile</key><string>DeskTidy.icns</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.2.0</string>
     <key>CFBundleVersion</key><string>1</string>
@@ -49,6 +101,31 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+cat > "$APP/Contents/Resources/DeskTidyBuild.json" <<BUILDINFO
+{"sourceCommit":"$SOURCE_COMMIT","minimumMacOS":"$MACOS_MIN","architecture":"arm64","signing":"ad-hoc-local-only"}
+BUILDINFO
 
+"$REPO/scripts/generate-app-icon.sh" "$APP/Contents/Resources/DeskTidy.icns"
+# The migration bundle is staged inside the signed app but remains inert until
+# migrate-live.sh is invoked with --execute and an exact rollback epoch.
+CLI_SOURCES=("$REPO"/src/*.swift)
+xcrun swiftc -O -parse-as-library \
+  -target "arm64-apple-macosx$MACOS_MIN" \
+  "${CLI_SOURCES[@]}" \
+  -o "$MIGRATION/desktidy-sort"
+codesign -s - -i com.desktidy.sort --force "$MIGRATION/desktidy-sort"
+/usr/bin/ditto "$REPO/src/desktidy-notify.sh" "$MIGRATION/desktidy-notify.sh"
+/usr/bin/ditto "$REPO/launchagents/com.desktidy.sort.plist.template" "$MIGRATION/com.desktidy.sort.plist.template"
+/usr/bin/ditto "$REPO/launchagents/com.desktidy.notify.plist.template" "$MIGRATION/com.desktidy.notify.plist.template"
+/usr/bin/ditto "$REPO/scripts/migrate-live.sh" "$MIGRATION/migrate-live.sh"
+chmod 755 "$MIGRATION/desktidy-sort" "$MIGRATION/desktidy-notify.sh" "$MIGRATION/migrate-live.sh"
+printf 'sourceCommit=%s\n' "$SOURCE_COMMIT" > "$MIGRATION/IDENTITY"
+(
+  cd "$MIGRATION"
+  find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 > SHA256SUMS
+)
 codesign -s - -i com.desktidy.app --force "$APP"
-echo "built: $APP"
+"$REPO/scripts/test-app-icon.sh" "$APP"
+"$REPO/scripts/test-migration-bundle.sh" "$APP" "$SOURCE_COMMIT"
+echo "built local-only ad-hoc app: $APP"
+echo "signing: ad-hoc (-); not Developer ID signed, not notarized, and not for distribution"

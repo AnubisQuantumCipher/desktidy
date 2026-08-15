@@ -35,6 +35,9 @@ final class FakeSMAdapter: ServiceManagementAdapting {
     }
     private(set) var calls: [Call] = []
     var statusResult: Result<SMAdapterStatus, SMAdapterError> = .success(.notRegistered)
+    var statusAfterRegister: SMAdapterStatus?
+    var statusAfterUnregister: SMAdapterStatus?
+    var observedTargetCanonical: String?
     var registerResult: Result<Void, SMAdapterError> = .success(())
     var unregisterResult: Result<Void, SMAdapterError> = .success(())
 
@@ -44,10 +47,16 @@ final class FakeSMAdapter: ServiceManagementAdapting {
     }
     func requestRegister(plistName: String) -> Result<Void, SMAdapterError> {
         calls.append(.register(plistName))
+        if case .success = registerResult, let statusAfterRegister {
+            statusResult = .success(statusAfterRegister)
+        }
         return registerResult
     }
     func requestUnregister(plistName: String) -> Result<Void, SMAdapterError> {
         calls.append(.unregister(plistName))
+        if case .success = unregisterResult, let statusAfterUnregister {
+            statusResult = .success(statusAfterUnregister)
+        }
         return unregisterResult
     }
 

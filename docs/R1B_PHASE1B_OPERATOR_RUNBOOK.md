@@ -1,16 +1,16 @@
 # Phase 1B Operator Runbook — Sacrificial SMAppService Observation
 
-Phase 1A.1 seals measurement and grant preparation only. Authorization
-alone is **not** the next step.
+This is a historical runbook. Its bounded sacrificial observation was recorded
+on 2026-08-14; the exact claims and omissions are in
+`docs/evidence/R1B_PHASE1B_SACRIFICIAL_OBSERVATION.md`. It is not an
+authorization to repeat registration, mutate a live service, or migrate a
+production user.
 
-Phase 1B still requires:
+The observation's register/unregister record remains insufficient to establish
+production migration, Login Items, FDA/TCC, reboot, or login behavior. The
+historical steps below are retained for evidence interpretation only. A new
+observation would need fresh, separate architect authorization.
 
-1. a reviewed minimal patch connecting the sealed `PreparedMutationGrant` to
-   exactly one production adapter call;
-2. separate architect authorization for that patch and the observation.
-
-Do not run a real mutation path until both exist. Fake-substrate tests are
-not that observation.
 
 Token creation must use the **measured probe executable SHA-256** and the
 **compiled 40-hex source commit** from the built probe (`--plan` prints the
@@ -28,13 +28,13 @@ profiles are unavailable. Ad-hoc signing is development evidence only.
 
 Compilation of `SMAppService` is capability, not proof of runtime registration.
 
-## Identities (hypotheses until observed)
+## Identities — historical observation boundary
 
 | Item | Value | Status |
 |---|---|---|
-| Probe bundle id | `com.desktidy.sacrificial-probe` | coded |
-| Embedded plist | `Contents/Library/LaunchAgents/com.desktidy.sacrificial.plist` | coded |
-| Hypothesized label | `com.desktidy.sacrificial` | **UNOBSERVED** |
+| Probe bundle id | `com.desktidy.sacrificial-probe` | observed in historical transcript |
+| Embedded plist | `Contents/Library/LaunchAgents/com.desktidy.sacrificial.plist` | historical probe asset |
+| Sacrificial label | `com.desktidy.sacrificial` | historically observed; non-production |
 | Production self labels | `com.desktidy.sort`, `com.desktidy.notify` | unchanged |
 
 Do **not** add any observed label to `ProductIdentity.selfLabels` automatically.

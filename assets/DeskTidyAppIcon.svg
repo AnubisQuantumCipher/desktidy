@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <linearGradient id="sky" x1="180" y1="110" x2="850" y2="930" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#5AA3FF"/>
+      <stop offset="0.48" stop-color="#2477FF"/>
+      <stop offset="1" stop-color="#164DC4"/>
+    </linearGradient>
+    <linearGradient id="folder" x1="245" y1="318" x2="755" y2="806" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E8F0FF"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="410" y1="350" x2="630" y2="680" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F6F8FC"/>
+    </linearGradient>
+    <linearGradient id="mint" x1="622" y1="656" x2="801" y2="831" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#40E0AA"/>
+      <stop offset="1" stop-color="#12B981"/>
+    </linearGradient>
+    <filter id="outerShadow" x="40" y="40" width="944" height="964" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="30" stdDeviation="28" flood-color="#0B245A" flood-opacity="0.28"/>
+    </filter>
+    <filter id="cardShadow" x="170" y="220" width="700" height="700" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="22" stdDeviation="20" flood-color="#0B245A" flood-opacity="0.24"/>
+    </filter>
+  </defs>
+
+  <!-- A self-contained macOS icon silhouette with transparent corners. -->
+  <g filter="url(#outerShadow)">
+    <rect x="104" y="82" width="816" height="816" rx="186" fill="url(#sky)"/>
+    <rect x="105" y="83" width="814" height="814" rx="185" stroke="#FFFFFF" stroke-opacity="0.24" stroke-width="2"/>
+  </g>
+
+  <!-- Quiet glass highlight: the moment after the desk is clean. -->
+  <path d="M239 173C345 114 491 106 621 137C506 165 380 225 277 332C225 386 183 447 153 510V310C153 250 186 198 239 173Z" fill="#FFFFFF" fill-opacity="0.13"/>
+
+  <!-- Folder body. -->
+  <g filter="url(#cardShadow)">
+    <path d="M222 383C222 337 259 300 305 300H420L471 361H720C765 361 802 398 802 443V713C802 765 760 807 708 807H316C264 807 222 765 222 713V383Z" fill="url(#folder)"/>
+    <path d="M222 441C222 397 258 361 302 361H722C766 361 802 397 802 441V489H222V441Z" fill="#D7E5FF"/>
+    <path d="M222 489H802V713C802 765 760 807 708 807H316C264 807 222 765 222 713V489Z" fill="url(#folder)"/>
+    <path d="M223 489H801" stroke="#BED3FA" stroke-width="4"/>
+  </g>
+
+  <!-- One neatly filed document. -->
+  <g filter="url(#cardShadow)">
+    <rect x="394" y="337" width="236" height="318" rx="34" fill="url(#paper)"/>
+    <path d="M566 337L630 401H590C577 401 566 390 566 377V337Z" fill="#DCE8FF"/>
+    <rect x="438" y="443" width="149" height="18" rx="9" fill="#2477FF"/>
+    <rect x="438" y="489" width="116" height="16" rx="8" fill="#9CB7E9"/>
+    <rect x="438" y="531" width="149" height="16" rx="8" fill="#9CB7E9"/>
+    <rect x="438" y="573" width="88" height="16" rx="8" fill="#9CB7E9"/>
+  </g>
+
+  <!-- Mint completion seal: organized, never deleted. -->
+  <circle cx="707" cy="733" r="112" fill="url(#mint)"/>
+  <circle cx="707" cy="733" r="109" stroke="#FFFFFF" stroke-opacity="0.44" stroke-width="6"/>
+  <path d="M651 733L688 770L764 692" stroke="#FFFFFF" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+
+  <!-- Small tidy sparkle, deliberately asymmetric for recognizability at 16px. -->
+  <path d="M755 230C761 265 778 282 813 288C778 294 761 311 755 346C749 311 732 294 697 288C732 282 749 265 755 230Z" fill="#FFFFFF" fill-opacity="0.94"/>
+  <circle cx="838" cy="370" r="20" fill="#FFFFFF" fill-opacity="0.66"/>
+</svg>

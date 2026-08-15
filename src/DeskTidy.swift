@@ -26,14 +26,10 @@ struct CachedDecision: Codable, Equatable {
     let destination: String
     let certainty: String
     let reason: String
+    // Absent in pre-Phase-K cache rows; read them conservatively as unavailable.
+    let provenance: SmartTriageSuggestionProvenance?
 }
 
-struct Suggestion: Equatable {
-    let name: String
-    let destination: String
-    let certainty: String
-    let reason: String
-}
 
 final class DeskTidy {
     let fm = FileManager.default
@@ -52,7 +48,7 @@ final class DeskTidy {
     let smartItemLimit = 12
     let previewByteLimit = 24_000
     let previewCharacterLimit = 6_000
-    var lockFD: Int32 = -1
+    lazy var movementProcessLock = MovementProcessLock(url: lockURL)
 
     #if canImport(FoundationModels)
     let smartCompiledIn = true
@@ -67,8 +63,12 @@ final class DeskTidy {
                                         moverVersion: DeskTidyVersion.string,
                                         log: { [weak self] in self?.log($0) })
 
-    // The target's own type-folders are skipped when scanning the root.
-    var reservedRootNames: Set<String> { Set(Category.allCases.map { $0.folderName }) }
+    // The target's own type-folders and the established personal-sorter roots
+    // are control surfaces, not user directories to file under Folders/.
+    // Keeping the legacy names here makes the authority handoff non-destructive.
+    var reservedRootNames: Set<String> {
+        Category.reservedRootNames
+    }
 
     init() {
         home = fm.homeDirectoryForCurrentUser
@@ -129,6 +129,57 @@ final class DeskTidy {
         if arguments.contains("--phase1b-test") {
             return Phase1BTests().runAll() ? 0 : 1
         }
+        if arguments.contains("--phase2-test") {
+            return Phase2Tests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasec-test") {
+            return PhaseCTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phased-test") {
+            return PhaseDTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasee-test") {
+            return PhaseETests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasef-test") {
+            return PhaseFTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phaseg-test") {
+            return PhaseGTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phaseh-test") {
+            return PhaseHTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasei-test") {
+            return PhaseITests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasej-test") {
+            return PhaseJTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasek-test") {
+            return PhaseKTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasel-test") {
+            return PhaseLTests().runAll() ? 0 : 1
+        }
+        if arguments.contains("--phasel-campaign") {
+            guard let outputFlag = arguments.firstIndex(of: "--phase-l-output"),
+                  outputFlag + 1 < arguments.count else {
+                fputs("DeskTidy: --phasel-campaign requires --phase-l-output /private/tmp/<name>.jsonl\n", stderr)
+                return 2
+            }
+            do {
+                let result = try PhaseLCampaign(
+                    outputURL: URL(fileURLWithPath: arguments[outputFlag + 1])
+                ).run()
+                print("PHASE L CAMPAIGN: \(result.passedCases) passed, \(result.failedCases) failed, \(result.timedOutCases) timed out, \(result.totalCases) total")
+                return result.totalCases == PhaseLCampaignConfiguration.expectedCaseCount
+                    && result.failedCases == 0 && result.timedOutCases == 0 ? 0 : 1
+            } catch {
+                fputs("DeskTidy: Phase L campaign failed: \(error.localizedDescription)\n", stderr)
+                return 1
+            }
+        }
         if arguments.contains("--history") {
             return printHistory(arguments: arguments)
         }
@@ -181,6 +232,12 @@ final class DeskTidy {
             return 3
         }
 
+        if let problem = ledger.verifyChain() {
+            log("LEDGER INVALID: refusing movement — \(problem)")
+            fputs("DeskTidy: receipt ledger invalid — failing closed. \(problem)\n", stderr)
+            return 4
+        }
+
         // R0 crash recovery: reconcile any interrupted movement intents
         // against filesystem truth before making new decisions.
         _ = movement.startupReconcile()
@@ -199,9 +256,17 @@ final class DeskTidy {
         let forceSmart = arguments.contains("--smart-now")
         #if canImport(FoundationModels)
         if #available(macOS 26, *), Config.enableSmartTriage {
-            if forceSmart || smartTriageIsDue() {
+            switch SmartTriageControl.runGate(
+                compiledIn: smartCompiledIn,
+                isDue: forceSmart || smartTriageIsDue(),
+                lowPowerMode: false,
+                backendAvailable: true
+            ) {
+            case .mayRequestBackend:
                 markSmartTriageAttempt()
                 await writeSmartSuggestions()
+            case .compiledOut, .rateLimited, .lowPowerDeferred, .backendUnavailable:
+                break
             }
         }
         #endif
@@ -216,14 +281,18 @@ final class DeskTidy {
 
     // -- single-instance lock ----------------------------------------------
     func acquireLock() -> Bool {
-        lockFD = open(lockURL.path, O_CREAT | O_RDWR, mode_t(S_IRUSR | S_IWUSR))
-        guard lockFD >= 0 else { log("ERROR: unable to open single-instance lock"); return false }
-        guard flock(lockFD, LOCK_EX | LOCK_NB) == 0 else { close(lockFD); lockFD = -1; return false }
-        return true
+        do {
+            try movementProcessLock.acquire()
+            return true
+        } catch MovementProcessLockError.busy {
+            return false
+        } catch {
+            log("ERROR: unable to acquire movement process lock")
+            return false
+        }
     }
     func releaseLock() {
-        guard lockFD >= 0 else { return }
-        _ = flock(lockFD, LOCK_UN); close(lockFD); lockFD = -1
+        movementProcessLock.release()
     }
 
     // -- access probe (this is what fails without Full Disk Access) --------
@@ -245,6 +314,10 @@ final class DeskTidy {
     // Returns how many items were filed and how many were skipped only because
     // they were too fresh (still inside the settle window).
     func deterministicSweep() -> (moved: Int, skippedFresh: Int) {
+        guard let undoRestorations = movement.exactUndoRestorations() else {
+            log("LEDGER INVALID: refusing automatic sweep while Undo restoration state is unprovable")
+            return (0, 0)
+        }
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .isDirectoryKey, .isSymbolicLinkKey]
         let items: [URL]
         do {
@@ -266,6 +339,11 @@ final class DeskTidy {
                 let values = try item.resourceValues(forKeys: keys)
                 if values.isSymbolicLink == true {
                     log("SKIP symlink at root: \(safeLog(name))")
+                    continue
+                }
+                if let expectedIdentity = undoRestorations[name],
+                   FileArtifactIdentity.capture(at: item) == expectedIdentity {
+                    log("SKIP exact Undo restoration at root: \(safeLog(name))")
                     continue
                 }
                 let modified = values.contentModificationDate ?? Date()
@@ -388,6 +466,15 @@ final class DeskTidy {
         if !shouldSkipPartial("download.CRDOWNLOAD") || shouldSkipPartial("ready.txt") {
             fputs("FAIL partial-download guard\n", stderr); failures += 1
         }
+        let expectedRoots: Set<String> = ["Archive", "Docs", "Inbox", "Media", "Projects"]
+        if Category.reservedRootNames != expectedRoots {
+            fputs("FAIL five-root Desktop contract\n", stderr); failures += 1
+        }
+        if Config.folderScreenshots != "Media/Screenshots"
+            || Config.folderDocuments != "Docs/Notes-and-Misc"
+            || Config.folderArchives != "Archive/Misc" {
+            fputs("FAIL established nested destination contract\n", stderr); failures += 1
+        }
         // collision de-dup must preserve the extension and not overwrite
         let scratch = fm.temporaryDirectory.appendingPathComponent("DeskTidy-selftest-\(UUID().uuidString)")
         do {
@@ -400,7 +487,7 @@ final class DeskTidy {
             try fm.removeItem(at: scratch)
         } catch { fputs("FAIL collision setup: \(error)\n", stderr); failures += 1 }
 
-        if failures == 0 { print("PASS: \(cases.count + 2) deterministic safety checks"); return true }
+        if failures == 0 { print("PASS: \(cases.count + 4) deterministic safety checks"); return true }
         return false
     }
 }
