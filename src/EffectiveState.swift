@@ -237,11 +237,28 @@ enum EffectiveState {
         isPaused ? "pause.circle.fill" : menuBarSymbol(for: overall)
     }
 
+    static func isExpectedPersonalMigration(_ report: EffectiveStateReport) -> Bool {
+        report.overall == .foreignConflict
+            && report.foreignMovers == ["com.sicarii.desktop-autosort"]
+            && report.effectiveMoverLabel == "com.sicarii.desktop-autosort"
+            && !report.productAgentLoaded
+    }
+
+    static func menuBarSymbol(for report: EffectiveStateReport, isPaused: Bool) -> String {
+        if isPaused { return "pause.circle.fill" }
+        if isExpectedPersonalMigration(report) { return "arrow.triangle.2.circlepath" }
+        return menuBarSymbol(for: report.overall)
+    }
+
     static func statusLine(for report: EffectiveStateReport) -> String {
         switch report.overall {
         case .runningHealthy:  return "Active — sole authority for \(shortPath(report.watchedTarget))"
         case .pausedNotLoaded: return "Not running — agent not loaded"
-        case .foreignConflict: return "Conflict — \(report.foreignMovers.joined(separator: ", ")) owns this folder"
+        case .foreignConflict:
+            if isExpectedPersonalMigration(report) {
+                return "Ready to migrate — existing Desktop sorter is active"
+            }
+            return "Conflict — \(report.foreignMovers.joined(separator: ", ")) owns this folder"
         case .degradedLedger:  return "Attention — receipt ledger failed verification"
         case .ambiguous:       return "Unknown — \(report.ambiguityReason ?? "state unprovable")"
         }
@@ -249,6 +266,13 @@ enum EffectiveState {
 
     static func statusLine(for report: EffectiveStateReport, isPaused: Bool) -> String {
         isPaused ? "Paused — file movement is disabled" : statusLine(for: report)
+    }
+
+    static func conflictGuidance(for report: EffectiveStateReport) -> String {
+        if isExpectedPersonalMigration(report) {
+            return "Your existing Desktop sorter is still active. DeskTidy remains safely inactive until the verified migration transfers authority and preserves rollback."
+        }
+        return "DeskTidy will not sort this folder while another automation owns it. DeskTidy cannot disable that automation; choose a different folder or use its own controls."
     }
 
     static func nativeMenuControls(

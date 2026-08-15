@@ -233,6 +233,19 @@ final class R1ATests {
               EffectiveState.menuBarSymbol(for: notLoaded.overall, isPaused: false) != "pause.circle.fill"
                 && EffectiveState.statusLine(for: notLoaded, isPaused: false).hasPrefix("Not running"))
 
+        let genericConflict = modelState(fixtures.first { $0.expected == .foreignConflict }!)
+        var expectedMigration = genericConflict
+        expectedMigration.foreignMovers = ["com.sicarii.desktop-autosort"]
+        expectedMigration.effectiveMoverLabel = "com.sicarii.desktop-autosort"
+        check("U16", "the known personal sorter renders as an expected migration, not a product warning",
+              EffectiveState.menuBarSymbol(for: expectedMigration, isPaused: false) == "arrow.triangle.2.circlepath"
+                && EffectiveState.statusLine(for: expectedMigration, isPaused: false).hasPrefix("Ready to migrate")
+                && EffectiveState.conflictGuidance(for: expectedMigration).contains("verified migration"))
+        check("U17", "an unknown same-root authority still renders as a warning",
+              EffectiveState.menuBarSymbol(for: genericConflict, isPaused: false) == "exclamationmark.triangle"
+                && EffectiveState.statusLine(for: genericConflict, isPaused: false).hasPrefix("Conflict")
+                && EffectiveState.conflictGuidance(for: genericConflict).contains("another automation"))
+
         for state in [OverallState.foreignConflict, .degradedLedger, .ambiguous] {
             let report = modelState(fixtures.first { $0.expected == state }!)
             let controls = EffectiveState.nativeMenuControls(

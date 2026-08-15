@@ -233,6 +233,14 @@ text = Path(src).read_text()
 for old, new in {'__SORT_BIN__':sort_bin,'__NOTIFY_SH__':notify,'__APPDIR__':support,'__TARGET__':target}.items(): text=text.replace(old,new)
 Path(out).write_text(text)
 PY
+/usr/bin/python3 - "$STAGE/support/config.json" "$TARGET" <<'PY'
+import json, os, sys
+path, target = sys.argv[1:]
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump({"schema": 1, "target": target}, handle, sort_keys=True, separators=(",", ":"))
+    handle.write("\n")
+os.chmod(path, 0o644)
+PY
 /usr/bin/plutil -lint "$STAGE/com.desktidy.sort.plist" "$STAGE/com.desktidy.notify.plist" >/dev/null
 
 # Production quiescence: no known sorter process may be active at the handoff seam.

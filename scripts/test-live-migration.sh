@@ -129,6 +129,14 @@ cmp -s "$FIXTURE/expected-success" "$FIXTURE/success/launchctl.log" || fail "suc
 [ -f "$FIXTURE/success/state/com.desktidy.sort" ] && [ -f "$FIXTURE/success/state/com.desktidy.notify" ] || fail "new labels absent"
 [ ! -f "$FIXTURE/success/state/com.sicarii.desktop-autosort" ] && [ ! -f "$FIXTURE/success/state/com.sicarii.desktop-autosort-notify" ] || fail "old labels remain loaded"
 [ -f "$FIXTURE/success/home/Library/Application Support/DesktopAutoSort/desktop-autosort-helper" ] || fail "old files deleted"
+python3 - "$FIXTURE/success/home/Library/Application Support/DeskTidy/config.json" "$FIXTURE/success/target" <<'PY' \
+  || fail "successful migration did not persist native target configuration"
+import json, sys
+with open(sys.argv[1], encoding="utf-8") as handle:
+    config = json.load(handle)
+if config != {"schema": 1, "target": sys.argv[2]}:
+    raise SystemExit(f"unexpected config: {config!r}")
+PY
 grep -F 'MIGRATION=PASS' "$FIXTURE/success/out" >/dev/null || fail "success marker"
 
 # Failure after sorter bootstrap must remove it and restore both old labels.

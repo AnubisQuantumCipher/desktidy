@@ -278,7 +278,7 @@ struct DeskTidyApp: App {
             NativeMenuContent(boundary: boundary)
         } label: {
             Image(systemName: EffectiveState.menuBarSymbol(
-                for: boundary.model.effectiveState.effective.overall,
+                for: boundary.model.effectiveState.effective,
                 isPaused: boundary.model.effectiveState.isPaused
             ))
                 .accessibilityLabel("DeskTidy status")
@@ -354,7 +354,7 @@ struct NativeMenuContent: View {
                     .accessibilityLabel("DeskTidy result: \(message)")
             }
             if conflict {
-                Text("DeskTidy will not sort this folder while another automation owns it. DeskTidy cannot disable that automation; choose a different folder or use its own controls.")
+                Text(EffectiveState.conflictGuidance(for: report))
                     .font(.system(size: 10.5))
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -378,7 +378,7 @@ struct NativeMenuContent: View {
     private var headline: some View {
         HStack(spacing: 8) {
             Image(systemName: EffectiveState.menuBarSymbol(
-                for: report.overall,
+                for: report,
                 isPaused: model.effectiveState.isPaused
             ))
                 .foregroundStyle(color(for: report.overall))
