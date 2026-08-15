@@ -251,11 +251,28 @@ def main() -> None:
     records.append(record_static("sacrificial-lifecycle", "blocked", "No direct install/upgrade/uninstall occurred; only plan-only lifecycle controls were run.", ["not-run", "direct local lifecycle"] ))
 
     uid = str(os.getuid())
-    live = run_command("live-authority-readback", ["/bin/bash", "-c", f"launchctl print gui/{uid}/com.desktidy.sort; sort_rc=$?; launchctl print gui/{uid}/com.desktidy.notify; notify_rc=$?; printf 'sort_rc=%s notify_rc=%s\\n' \"$sort_rc\" \"$notify_rc\"; exit 0"], root, logs, phase_environment)
-    live["status"] = "indeterminate"
-    live["message"] = "Read-only DeskTidy label readback recorded; no fresh personal-mover baseline is available in this gate."
+    live_command = (
+        f"launchctl print gui/{uid}/com.desktidy.sort >/dev/null && "
+        f"launchctl print gui/{uid}/com.desktidy.notify >/dev/null && "
+        f"! launchctl print gui/{uid}/com.sicarii.desktop-autosort >/dev/null 2>&1 && "
+        f"! launchctl print gui/{uid}/com.sicarii.desktop-autosort-notify >/dev/null 2>&1 && "
+        "/usr/libexec/PlistBuddy -c 'Print :WatchPaths:0' "
+        "\"$HOME/Library/LaunchAgents/com.desktidy.sort.plist\" | "
+        "grep -Fx \"$HOME/Desktop\""
+    )
+    live = run_command("live-authority-readback", ["/bin/bash", "-c", live_command], root, logs, phase_environment)
+    live["message"] = (
+        "Read-only checks require both DeskTidy labels, both legacy labels absent, "
+        "and the sorter target equal to the operator Desktop."
+    )
     records.append(live)
-    records.append(record_static("website-build", "blocked", "website/node_modules/.bin/next is absent; no dependency installation or deployment was attempted.", ["npm", "run", "build", "(not run)"]))
+    records.append(run_command(
+        "website-build",
+        ["/bin/bash", "-c", "npm --prefix website ci --ignore-scripts && npm --prefix website run lint && npm --prefix website run build && npm --prefix website audit --audit-level=high"],
+        root,
+        logs,
+        phase_environment,
+    ))
     records.append(record_static("hosted-final-sha", "blocked", "No hosted macOS 14/15 CI run is tied to this local source commit.", ["not-run", "hosted CI"]))
 
     by_id = {record["id"]: record for record in records}
