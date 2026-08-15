@@ -283,7 +283,7 @@ final class MovementService {
     // -- confinement ---------------------------------------------------------
     /// Source must be a direct, non-symlink child of the canonical root;
     /// destination directory must resolve inside the canonical root.
-    private func validateConfinement(source: URL, destDir: URL) throws {
+    private func validateConfinement(source: URL, destDir: URL, relativeDestDir: String) throws {
         let name = source.lastPathComponent
         if name == ".." || name == "." || name.contains("/") {
             throw MoveError.confinement("illegal source name")
@@ -297,6 +297,21 @@ final class MovementService {
         if let values = try? source.resourceValues(forKeys: [.isSymbolicLinkKey]),
            values.isSymbolicLink == true {
             throw MoveError.confinement("source is a symlink")
+        }
+        let destinationComponents = relativeDestDir.split(separator: "/", omittingEmptySubsequences: false)
+        guard (1...16).contains(destinationComponents.count),
+              destinationComponents.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
+            throw MoveError.confinement("destination category path is invalid")
+        }
+        // Every existing destination component must be a real directory path,
+        // never a symlink hop. Nested destinations are allowed only beneath the
+        // canonical watched root.
+        var componentProbe = URL(fileURLWithPath: rootCanonical.path, isDirectory: true)
+        for component in destinationComponents {
+            componentProbe.appendPathComponent(String(component), isDirectory: true)
+            if isSymbolicLink(componentProbe) {
+                throw MoveError.confinement("destination path contains a symlink")
+            }
         }
         // Destination directory (existing or to-be-created) must resolve inside root.
         var probe = destDir
@@ -345,7 +360,7 @@ final class MovementService {
 
         // 1. Confinement — validated before anything is written anywhere.
         do {
-            try validateConfinement(source: source, destDir: destDir)
+            try validateConfinement(source: source, destDir: destDir, relativeDestDir: category.folderName)
         } catch {
             log("REFUSED \(source.lastPathComponent): \(error)")
             var r = skeleton(source: source, planned: destDir.appendingPathComponent(source.lastPathComponent),
@@ -566,8 +581,7 @@ final class MovementService {
 
     private func confinedPath(for relativePath: String, directRootChild: Bool) -> URL? {
         let components = relativePath.split(separator: "/", omittingEmptySubsequences: false)
-        let expectedComponentCount = directRootChild ? 1 : 2
-        guard components.count == expectedComponentCount,
+        guard (directRootChild ? components.count == 1 : (2...17).contains(components.count)),
               components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
             return nil
         }
@@ -577,10 +591,13 @@ final class MovementService {
         if directRootChild {
             guard AuthorityGuard.canonicalize(parent.path) == rootCanonical else { return nil }
         } else {
-            guard AuthorityGuard.canonicalize(parent.deletingLastPathComponent().path) == rootCanonical,
-                  !isSymbolicLink(parent) else {
-                return nil
+            var cursor = URL(fileURLWithPath: rootCanonical.path, isDirectory: true)
+            for component in components.dropLast() {
+                cursor.appendPathComponent(String(component), isDirectory: true)
+                if isSymbolicLink(cursor) { return nil }
             }
+            let rootPrefix = rootCanonical.path.hasSuffix("/") ? rootCanonical.path : rootCanonical.path + "/"
+            guard cursor.path.hasPrefix(rootPrefix) else { return nil }
         }
         guard !isSymbolicLink(path) else { return nil }
         return path

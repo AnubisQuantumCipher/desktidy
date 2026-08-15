@@ -21,10 +21,11 @@ Homebrew developer preview; neither is a supported production release.
   rejects same-target foreign or uninspectable authority, and uses
   process-exact quiescence checks. The fake-substrate transaction suite passes
   10 cases.
-- The first live run exposed a compatibility defect that moved the retained
-  `Archive`, `Docs`, `Media`, and `Projects` roots under `Folders/`. Those exact
-  directories were restored with unchanged inodes. A shared compatibility set
-  now protects all four in automatic and manual sweeps.
+- The five established Desktop roots are exactly `Archive`, `Docs`, `Inbox`,
+  `Media`, and `Projects`. The first native policy incorrectly exposed flat
+  `Documents` and `Screenshots` roots; policy v2 restores type destinations
+  beneath the established five and reserves exactly those roots in automatic
+  and manual sweeps.
 - The authorized PDF canary completed an actual
   `CanonicalApplicationCore.live().undo(receiptID:)` A→B→A cycle with identical
   SHA-256 and inode. Its first Undo exposed an immediate automatic re-sort;
@@ -86,8 +87,9 @@ evidence only.
 - Undo restores only the exact receipt-bound artifact into an empty original
   slot. Automatic sweeps preserve that exact restoration; explicit Tidy Now is
   the user-authorized override.
-- `Archive`, `Docs`, `Media`, and `Projects` are migration compatibility roots
-  and remain at the watched root.
+- `Archive`, `Docs`, `Inbox`, `Media`, and `Projects` are the complete visible
+  routing roots and remain at the watched root. Type destinations such as
+  `Media/Screenshots` and `Docs/Notes-and-Misc` are nested beneath them.
 - Receipt-derived notifications are best effort and never define movement
   truth. An unbundled caller skips native notification setup safely.
 - Smart-triage suggestions are non-mutating and never authorize a move.

@@ -126,7 +126,7 @@ final class PhaseHTests {
             firstEntry?.originalName == "invoice.pdf"
                 && firstEntry?.finalName == "invoice.pdf"
                 && secondEntry?.finalName != "invoice.pdf"
-                && secondEntry?.category == "Documents"
+                && secondEntry?.category == "Docs"
                 && firstEntry?.timestamp != nil
                 && firstEntry?.mover == "com.desktidy.sort"
                 && undo.outcome == .completed

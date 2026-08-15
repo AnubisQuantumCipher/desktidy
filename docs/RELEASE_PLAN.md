@@ -14,9 +14,10 @@ from the retained personal sorter to `com.desktidy.sort` and
 `targetSource=nativeConfig`, and a valid receipt chain. The former labels and
 active plists are absent; byte-verified rollback assets remain retained.
 
-The local deployment is operational and rollback-backed, not a public release,
-Homebrew update, Developer ID-signed/notarized artifact, TestFlight/App Store
-build, or public installer. Phase N keyboard focus traversal and spoken
+The local deployment is operational and rollback-backed, not a supported public
+release, Developer ID-signed/notarized artifact, TestFlight/App Store build, or
+public installer. A bounded source-built Homebrew developer preview exists.
+Phase N keyboard focus traversal and spoken
 VoiceOver output remain **INDETERMINATE**. Historical sacrificial
 `SMAppService` evidence still does not prove Login Items/FDA/TCC, reboot, or
 login behavior, and no reboot was performed for this seal.
@@ -32,6 +33,9 @@ The live transaction and its defects are not presented as a smooth cutover:
    sorter re-filed it two seconds later; one shared process lock plus exact
    durable-Undo suppression fixed the race, and the same canary then completed
    a stable A→B→A cycle.
+4. the first native category table exposed `Documents` and `Screenshots` as
+   extra Desktop roots; routing policy v2 restores the exact five-root contract
+   and permits only traversal-safe nested destinations beneath it.
 
 Full evidence: [`evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md`](evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md).
 

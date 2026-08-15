@@ -466,6 +466,15 @@ final class DeskTidy {
         if !shouldSkipPartial("download.CRDOWNLOAD") || shouldSkipPartial("ready.txt") {
             fputs("FAIL partial-download guard\n", stderr); failures += 1
         }
+        let expectedRoots: Set<String> = ["Archive", "Docs", "Inbox", "Media", "Projects"]
+        if Category.reservedRootNames != expectedRoots {
+            fputs("FAIL five-root Desktop contract\n", stderr); failures += 1
+        }
+        if Config.folderScreenshots != "Media/Screenshots"
+            || Config.folderDocuments != "Docs/Notes-and-Misc"
+            || Config.folderArchives != "Archive/Misc" {
+            fputs("FAIL established nested destination contract\n", stderr); failures += 1
+        }
         // collision de-dup must preserve the extension and not overwrite
         let scratch = fm.temporaryDirectory.appendingPathComponent("DeskTidy-selftest-\(UUID().uuidString)")
         do {
@@ -478,7 +487,7 @@ final class DeskTidy {
             try fm.removeItem(at: scratch)
         } catch { fputs("FAIL collision setup: \(error)\n", stderr); failures += 1 }
 
-        if failures == 0 { print("PASS: \(cases.count + 2) deterministic safety checks"); return true }
+        if failures == 0 { print("PASS: \(cases.count + 4) deterministic safety checks"); return true }
         return false
     }
 }

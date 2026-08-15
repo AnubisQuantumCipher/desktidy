@@ -257,6 +257,7 @@ final class R0Tests {
         // C12: move syscall failure (destination category dir is a FILE) → failed receipt, source intact.
         do {
             let (root, _, _, svc) = makeEngineSandbox()
+            try? fm.createDirectory(at: root.appendingPathComponent("Docs"), withIntermediateDirectories: true)
             fm.createFile(atPath: root.appendingPathComponent(Config.folderDocuments).path, contents: Data())
             let src = settledFile(root, "blocked.pdf")
             let receipt = moveVia(svc, src)
@@ -314,7 +315,8 @@ final class R0Tests {
             let r = ledger.readAll().receipts.last
             check("C14", "restart: source present → failed crash_before_move",
                   r?.outcome == "failed" && r?.failureCode == "crash_before_move"
-                  && fm.fileExists(atPath: root.appendingPathComponent("unmoved.pdf").path))
+                  && fm.fileExists(atPath: root.appendingPathComponent("unmoved.pdf").path),
+                  "outcome=\(r?.outcome ?? "nil") code=\(r?.failureCode ?? "nil")")
         }
 
         // C15: restart with intent + destination present → recovered, undo-eligible.
@@ -359,7 +361,8 @@ final class R0Tests {
             _ = svc.startupReconcile()
             let r = ledger.readAll().receipts.last
             check("C17", "restart: neither present → indeterminate",
-                  r?.outcome == "indeterminate" && r?.failureCode == "state_unprovable")
+                  r?.outcome == "indeterminate" && r?.failureCode == "state_unprovable",
+                  "outcome=\(r?.outcome ?? "nil") code=\(r?.failureCode ?? "nil")")
         }
 
         // C18: malformed/truncated pending intent → quarantined + indeterminate marker.
@@ -424,6 +427,7 @@ final class R0Tests {
         do {
             let (root, _, _, svc) = makeEngineSandbox()
             let outside = tempDir("outside")
+            try? fm.createDirectory(at: root.appendingPathComponent("Docs"), withIntermediateDirectories: true)
             try? fm.createSymbolicLink(at: root.appendingPathComponent(Config.folderDocuments),
                                        withDestinationURL: outside)
             let src = settledFile(root, "lured.pdf")
@@ -556,7 +560,7 @@ final class R0Tests {
             let root = tempDir("legacy-category-roots")
             let app = tempDir("legacy-category-app")
             let agents = tempDir("legacy-category-agents")
-            let names = ["Archive", "Docs", "Media", "Projects"]
+            let names = ["Archive", "Docs", "Inbox", "Media", "Projects"]
             for name in names {
                 let directory = root.appendingPathComponent(name, isDirectory: true)
                 try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -569,8 +573,9 @@ final class R0Tests {
             unsetenv("DESKTIDY_TARGET_DIR"); unsetenv("DESKTIDY_APP_DIR"); unsetenv("DESKTIDY_AGENTS_DIR")
             let preserved = names.allSatisfy { fm.fileExists(atPath: root.appendingPathComponent($0).path) }
             let moved = ReceiptLedger(appDirectory: app).readAll().receipts.filter { $0.outcome == "moved" }
-            check("C31", "legacy category roots remain at the watched root",
-                  preserved && moved.isEmpty, "preserved=\(preserved) moved=\(moved.count)")
+            check("C31", "the five established Desktop roots remain at the watched root",
+                  preserved && moved.isEmpty && Category.reservedRootNames == Set(names),
+                  "preserved=\(preserved) moved=\(moved.count) roots=\(Category.reservedRootNames.sorted())")
         }
 
         // C32: a successful automatic move followed by Undo must not be

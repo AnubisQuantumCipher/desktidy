@@ -299,7 +299,7 @@ final class PhaseLCampaign {
         try withFixture(index) { f in
             let source = try settledFile(in: f.root, named: "report.PDF", data: Data("report".utf8))
             let result = f.core.tidyNow()
-            let destination = f.root.appendingPathComponent("Documents/report.PDF")
+            let destination = f.root.appendingPathComponent("\(Config.folderDocuments)/report.PDF")
             return CaseEvaluation(passed: result.moved.count == 1 && !fm.fileExists(atPath: source.path)
                                   && fm.contents(atPath: destination.path) == Data("report".utf8), checks: 3, detail: "document was not moved through the canonical core")
         }
@@ -317,7 +317,7 @@ final class PhaseLCampaign {
 
     private func collisionCase(_ index: Int) throws -> CaseEvaluation {
         try withFixture(index) { f in
-            let documents = f.root.appendingPathComponent("Documents", isDirectory: true)
+            let documents = f.root.appendingPathComponent(Config.folderDocuments, isDirectory: true)
             try fm.createDirectory(at: documents, withIntermediateDirectories: true)
             let existing = documents.appendingPathComponent("report.pdf")
             guard fm.createFile(atPath: existing.path, contents: Data("original".utf8)) else {
@@ -363,7 +363,7 @@ final class PhaseLCampaign {
             _ = try settledFile(in: source, named: "inside.txt", data: Data("inside".utf8))
             try fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)], ofItemAtPath: source.path)
             let result = f.core.tidyNow()
-            let destination = f.root.appendingPathComponent("Folders/Project/inside.txt")
+            let destination = f.root.appendingPathComponent("\(Config.folderFolders)/Project/inside.txt")
             return CaseEvaluation(passed: result.moved.count == 1 && !fm.fileExists(atPath: source.path)
                                   && fm.contents(atPath: destination.path) == Data("inside".utf8), checks: 3, detail: "directory did not route through Folders")
         }
@@ -440,7 +440,7 @@ final class PhaseLCampaign {
             _ = try settledFile(in: f.root, named: "SCREEN SHOT 2026-08-14.PNG", data: Data("pixels".utf8))
             let receipt = f.core.tidyNow().moved.first
             let destination = receipt?.finalDestRel ?? receipt?.plannedDestRel
-            return CaseEvaluation(passed: destination == "Screenshots/SCREEN SHOT 2026-08-14.PNG"
+            return CaseEvaluation(passed: destination == "\(Config.folderScreenshots)/SCREEN SHOT 2026-08-14.PNG"
                                   && receipt?.ruleID == "prefix:screenshot", checks: 2, detail: "case-insensitive screenshot prefix was not recognized")
         }
     }

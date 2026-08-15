@@ -446,7 +446,7 @@ final class PhaseGTests {
     private func runLegacyRootCompatibilityContract() {
         let f = fixture()
         defer { try? fm.removeItem(at: f.root.deletingLastPathComponent()) }
-        let names = ["Archive", "Docs", "Media", "Projects"]
+        let names = ["Archive", "Docs", "Inbox", "Media", "Projects"]
         for name in names {
             let directory = f.root.appendingPathComponent(name, isDirectory: true)
             try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -456,7 +456,7 @@ final class PhaseGTests {
         let result = f.core.tidyNow()
         check(
             "G14",
-            "manual Tidy Now preserves legacy category roots just like the automatic mover",
+            "manual Tidy Now preserves the five established roots just like the automatic mover",
             result.moved.isEmpty
                 && names.allSatisfy { fm.fileExists(atPath: f.root.appendingPathComponent($0).path) }
         )

@@ -121,9 +121,9 @@ final class PhaseITests {
                 && recent.evidence == .available
                 && recent.entries.count == 1
                 && recent.entries.first?.name == "intent.pdf"
-                && recent.entries.first?.category == "Documents"
+                && recent.entries.first?.category == "Docs"
                 && found.evidence == .moved
-                && found.category == "Documents"
+                && found.category == "Docs"
                 && invalid.evidence == .invalidQuery,
             "tidy=\(tidy.evidence), recent=\(recent.entries.count), found=\(found.evidence), invalid=\(invalid.evidence)"
         )

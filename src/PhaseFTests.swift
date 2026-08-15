@@ -124,7 +124,7 @@ final class PhaseFTests {
                 && payload?.receiptID == receipt?.id
                 && payload?.originalName == "report.pdf"
                 && payload?.finalName == "report.pdf"
-                && payload?.destinationCategory == Config.folderDocuments
+                && payload?.destinationCategory == "Docs"
                 && payload?.destinationPath == "\(Config.folderDocuments)/report.pdf"
                 && payload?.actions == [.reveal, .undo]
         )

@@ -10,8 +10,10 @@
 - Migration transaction controls now cover 10 cases, including bound prior
   support backup/restore, missing unrelated WatchPaths, process-exact
   quiescence, old-plist removal, and rollback after partial shutdown.
-- `Archive`, `Docs`, `Media`, and `Projects` are shared compatibility roots for
-  automatic and manual sweeps after exact live restoration of those directories.
+- Routing policy v2 restores the exact five-root Desktop contract: `Archive`,
+  `Docs`, `Inbox`, `Media`, and `Projects`. Documents, screenshots, other media,
+  archives, code, and dropped folders route only beneath those roots. Nested
+  receipt recovery/history paths retain traversal and symlink confinement.
 - Watcher, Tidy Now, and Undo share one cross-process movement lock. Automatic
   sweeps preserve the exact latest durable Undo restoration; damaged-ledger
   startup fails closed. The named live canary completed a stable actual-core
@@ -21,8 +23,9 @@
 - The inactive website waitlist/API and Neon dependency were removed; website
   and privacy copy now match the bounded local-deployment evidence.
 - The installed arm64 macOS 14+ app remains ad-hoc signed. Gatekeeper rejection
-  is expected. Developer ID signing, notarization, TestFlight/App Store, public
-  release, and Homebrew update remain absent.
+  is expected. A source-built Homebrew developer preview exists; Developer ID
+  signing, notarization, TestFlight/App Store, and a supported public production
+  release remain absent.
 - Direct pixels and AX controls exist, but keyboard focus traversal and spoken
   VoiceOver output remain **INDETERMINATE**. Historical sacrificial evidence
   does not prove Login Items, FDA/TCC, reboot, or login behavior.

@@ -177,7 +177,8 @@ final class CanonicalHistoryQuery {
 
     private func categoryComponent(of relative: String) -> String? {
         let components = relative.split(separator: "/", omittingEmptySubsequences: false)
-        guard components.count == 2, !components[0].isEmpty, components[0] != ".", components[0] != ".." else {
+        guard (2...17).contains(components.count),
+              components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
             return nil
         }
         return String(components[0])
@@ -197,18 +198,21 @@ final class CanonicalHistoryQuery {
 
     private func confinedDestination(_ relative: String, allowsRootLevel: Bool) -> URL? {
         let components = relative.split(separator: "/", omittingEmptySubsequences: false)
-        let expectedCount = allowsRootLevel ? 1 : 2
-        guard components.count == expectedCount,
+        guard (allowsRootLevel ? components.count == 1 : (2...17).contains(components.count)),
               components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
             return nil
         }
         let destination = movement.root.appendingPathComponent(relative)
-        let parent = destination.deletingLastPathComponent()
-        let rootBoundary = allowsRootLevel ? parent : parent.deletingLastPathComponent()
-        guard AuthorityGuard.canonicalize(rootBoundary.path) == movement.rootCanonical,
-              !isSymbolicLink(destination),
-              allowsRootLevel || !isSymbolicLink(parent) else {
-            return nil
+        if allowsRootLevel {
+            guard AuthorityGuard.canonicalize(destination.deletingLastPathComponent().path) == movement.rootCanonical,
+                  !isSymbolicLink(destination) else { return nil }
+        } else {
+            var cursor = URL(fileURLWithPath: movement.rootCanonical.path, isDirectory: true)
+            for component in components.dropLast() {
+                cursor.appendPathComponent(String(component), isDirectory: true)
+                if isSymbolicLink(cursor) { return nil }
+            }
+            guard !isSymbolicLink(destination) else { return nil }
         }
         return destination
     }

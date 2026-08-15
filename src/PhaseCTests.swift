@@ -159,11 +159,12 @@ final class PhaseCTests {
             "C04",
             "Tidy Now, history, Where Did It Go, undo, and notification events share MovementService receipts",
             moved.moved.count == 1
-                && whereResult?.destination == "Documents/invoice.pdf"
+                && whereResult?.destination == "\(Config.folderDocuments)/invoice.pdf"
                 && undo?.outcome == .completed
                 && fm.fileExists(atPath: source.path)
                 && f.core.history().receipts.filter { $0.outcome == "moved" }.count == 2
-                && moveEvents.count == 2
+                && moveEvents.count == 2,
+            "moved=\(moved.moved.count) where=\(whereResult?.destination ?? "nil") undo=\(String(describing: undo?.outcome)) source=\(fm.fileExists(atPath: source.path)) history=\(f.core.history().receipts.filter { $0.outcome == "moved" }.count) events=\(moveEvents.count)"
         )
     }
 
@@ -201,7 +202,7 @@ final class PhaseCTests {
         _ = settledFile(in: f.root, named: "replay.pdf")
         let laterMove = f.core.tidyNow()
         let replay = f.core.undo(receiptID: receiptID)
-        let laterDestination = f.root.appendingPathComponent("Documents/replay.pdf")
+        let laterDestination = f.root.appendingPathComponent("\(Config.folderDocuments)/replay.pdf")
         check(
             "C06",
             "an undo receipt cannot be replayed against a later file",

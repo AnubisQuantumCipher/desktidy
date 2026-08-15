@@ -51,13 +51,19 @@ final class PhaseDTests {
         let duplicate = Data("{\"schema\":2,\"target\":\"/tmp/target\",\"settleSeconds\":15,\"categories\":{},\"rules\":{},\"suggestionsEnabled\":true,\"target\":\"/tmp/other\"}".utf8)
         let trailing = encoded + Data(" x".utf8)
         let unknown = Data("{\"schema\":2,\"target\":\"/tmp/target\",\"settleSeconds\":15,\"categories\":{},\"rules\":{},\"suggestionsEnabled\":true,\"extra\":1}".utf8)
+        var traversalObject = try! JSONSerialization.jsonObject(with: encoded) as! [String: Any]
+        var traversalCategories = traversalObject["categories"] as! [String: String]
+        traversalCategories["documents"] = "Docs/../Escape"
+        traversalObject["categories"] = traversalCategories
+        let traversal = try! JSONSerialization.data(withJSONObject: traversalObject)
         check(
             "D02",
-            "schema-2 accepts only the exact typed field set and rejects duplicate, trailing, and unknown data",
+            "schema-2 accepts safe nested categories and rejects duplicate, trailing, unknown, and traversal data",
             NativeConfigParser.parseConfiguration(encoded).configuration == good
                 && NativeConfigParser.parseConfiguration(duplicate).configuration == nil
                 && NativeConfigParser.parseConfiguration(trailing).configuration == nil
                 && NativeConfigParser.parseConfiguration(unknown).configuration == nil
+                && NativeConfigParser.parseConfiguration(traversal).configuration == nil
         )
     }
 

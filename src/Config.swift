@@ -21,21 +21,22 @@ enum Config {
     /// Version of the deterministic routing policy. Recorded in every movement
     /// receipt so history stays interpretable if rules change. Bump when any
     /// routing rule or extension set below changes meaning.
-    static let routingPolicyVersion = "1"
+    static let routingPolicyVersion = "2"
 
     // -- Folder names -------------------------------------------------------
-    // Rename these to whatever you like. DeskTidy creates each folder on demand
-    // (only when something actually needs it) and never touches these folders
-    // themselves while sorting.
-    static let folderInbox       = "Inbox"        // anything DeskTidy can't confidently place
-    static let folderDocuments   = "Documents"
-    static let folderImages      = "Images"
-    static let folderScreenshots = "Screenshots"
-    static let folderVideos      = "Videos"
-    static let folderAudio       = "Audio"
-    static let folderArchives    = "Archives"
-    static let folderCode        = "Code"
-    static let folderFolders     = "Folders"      // where dropped sub-folders go
+    // The Desktop has exactly five visible routing roots: Archive, Docs, Inbox,
+    // Media, and Projects. Type-specific destinations remain nested beneath
+    // those established roots; DeskTidy must never create category folders at
+    // the Desktop root.
+    static let folderInbox       = "Inbox"                  // anything DeskTidy can't confidently place
+    static let folderDocuments   = "Docs/Notes-and-Misc"
+    static let folderImages      = "Media/Images"
+    static let folderScreenshots = "Media/Screenshots"
+    static let folderVideos      = "Media/Videos"
+    static let folderAudio       = "Media/Audio"
+    static let folderArchives    = "Archive/Misc"
+    static let folderCode        = "Projects/Code"
+    static let folderFolders     = "Projects/Folders"       // where dropped sub-folders go
 
     // -- File-type routing (by lowercased extension) ------------------------
     // Move an extension between sets to change where that type goes. Keep the
@@ -80,11 +81,10 @@ enum Category: CaseIterable {
         }
     }
 
-    /// Root directories retained from the authorized personal-sorter
-    /// migration are control surfaces alongside DeskTidy's native categories.
-    /// Every automatic and manual sweep uses this one compatibility set.
+    /// Only the five established routing roots are control surfaces. Category
+    /// destinations may be nested, so reserve their first path component.
     static var reservedRootNames: Set<String> {
-        Set(allCases.map(\.folderName)).union(["Archive", "Docs", "Media", "Projects"])
+        Set(allCases.compactMap { $0.folderName.split(separator: "/").first.map(String.init) })
     }
 }
 

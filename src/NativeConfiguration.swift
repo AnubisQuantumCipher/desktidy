@@ -74,10 +74,22 @@ enum NativeConfigurationCodec {
         let values = Dictionary(uniqueKeysWithValues: fields); guard exact(values, NativeConfiguration.categoryKeys) else { return nil }
         var output: [String: String] = [:]; var names = Set<String>()
         for key in NativeConfiguration.categoryKeys {
-            guard case .string(let name)? = values[key], !name.isEmpty, name.count <= 64, name == name.trimmingCharacters(in: .whitespacesAndNewlines), name != ".", name != "..", !name.contains("/"), !name.unicodeScalars.contains(where: { $0.value < 0x20 }), names.insert(name).inserted else { return nil }
+            guard case .string(let name)? = values[key], validRelativeCategoryPath(name), names.insert(name).inserted else { return nil }
             output[key] = name
         }
         return output
+    }
+    private static func validRelativeCategoryPath(_ name: String) -> Bool {
+        guard !name.isEmpty, name.count <= 128,
+              name == name.trimmingCharacters(in: .whitespacesAndNewlines),
+              !name.hasPrefix("/"), !name.hasSuffix("/"), !name.contains("//"),
+              !name.contains("\\"),
+              !name.unicodeScalars.contains(where: { $0.value < 0x20 }) else { return false }
+        let components = name.split(separator: "/", omittingEmptySubsequences: false)
+        return components.allSatisfy { component in
+            !component.isEmpty && component != "." && component != ".."
+                && component == component.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
     }
     private static func decodeRules(_ fields: [(String, StrictNativeValue)]) -> [String: [String]]? {
         let values = Dictionary(uniqueKeysWithValues: fields); guard exact(values, NativeConfiguration.ruleKeys) else { return nil }
