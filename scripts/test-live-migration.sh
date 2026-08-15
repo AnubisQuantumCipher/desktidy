@@ -106,6 +106,21 @@ set -e
 grep -F 'unexpected authority watches target: com.example.foreign-sort' "$FIXTURE/foreign/out" >/dev/null || fail "foreign-authority marker"
 [ ! -e "$FIXTURE/foreign/launchctl.log" ] || fail "foreign-authority refusal touched launchctl"
 
+# A missing unrelated watched sibling does not make the existing target ambiguous.
+make_world "$FIXTURE/missing-unrelated"
+cat > "$FIXTURE/missing-unrelated/home/Library/LaunchAgents/com.example.missing.plist" <<PLIST
+<?xml version="1.0"?><plist version="1.0"><dict><key>Label</key><string>com.example.missing</string><key>ProgramArguments</key><array><string>/bin/true</string></array><key>WatchPaths</key><array><string>$FIXTURE/missing-unrelated/target/../missing-sibling</string></array></dict></plist>
+PLIST
+set +e
+env HOME="$FIXTURE/missing-unrelated/home" DESKTIDY_TEST_MODE=1 DESKTIDY_LAUNCHCTL="$FIXTURE/missing-unrelated/bin/launchctl" \
+  FAKE_LAUNCHCTL_LOG="$FIXTURE/missing-unrelated/launchctl.log" FAKE_LAUNCHCTL_STATE="$FIXTURE/missing-unrelated/state" \
+  "$MIGRATE" --execute --app "$FIXTURE/missing-unrelated/app" --backup "$FIXTURE/missing-unrelated/backup" \
+  --target "$FIXTURE/missing-unrelated/target" >"$FIXTURE/missing-unrelated/out" 2>&1
+missing_rc=$?
+set -e
+if [ "$missing_rc" -ne 0 ]; then cat "$FIXTURE/missing-unrelated/out" >&2; fail "missing unrelated watch path rc=$missing_rc"; fi
+grep -F 'MIGRATION=PASS' "$FIXTURE/missing-unrelated/out" >/dev/null || fail "missing unrelated success marker"
+
 # Successful atomic handoff.
 make_world "$FIXTURE/success"
 set +e
@@ -216,4 +231,4 @@ set -e
 grep -F 'MIGRATION=ROLLED_BACK' "$FIXTURE/partial/out" >/dev/null || fail "partial rollback marker"
 if grep -Fx 'bootstrap com.sicarii.desktop-autosort' "$FIXTURE/partial/launchctl.log" >/dev/null; then fail "already-loaded sorter was bootstrapped"; fi
 
-printf 'LIVE_MIGRATION_TEST=PASS cases=9\n'
+printf 'LIVE_MIGRATION_TEST=PASS cases=10\n'

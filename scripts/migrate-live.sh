@@ -177,7 +177,13 @@ for path in sorted(agents.glob("*.plist")):
             print(f"AMBIGUOUS:{label}:non-string WatchPaths entry")
             raise SystemExit(2)
         try:
-            watched = Path(raw).expanduser().resolve(strict=True)
+            candidate = Path(raw).expanduser()
+            if not candidate.is_absolute():
+                raise ValueError("relative WatchPaths entry")
+            # Resolve existing symlinked parents while allowing a missing leaf.
+            # A nonexistent sibling cannot own the already-existing target,
+            # but lexical aliases and symlinked parents must still compare equal.
+            watched = candidate.resolve(strict=False)
         except Exception as error:
             print(f"AMBIGUOUS:{label}:{error}")
             raise SystemExit(2)
