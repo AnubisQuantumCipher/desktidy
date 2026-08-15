@@ -58,6 +58,7 @@ OLD_SORT_PLIST="$LA/com.sicarii.desktop-autosort.plist"
 OLD_NOTIFY_PLIST="$LA/com.sicarii.desktop-autosort-notify.plist"
 NEW_SORT_PLIST="$LA/com.desktidy.sort.plist"
 NEW_NOTIFY_PLIST="$LA/com.desktidy.notify.plist"
+SORTING_PROCESS_PATTERN='(^| )([^ ]*/)?desktop-autosort-helper($| )|(^| )([^ ]*/)?desktidy-sort($| )'
 
 canonical_existing_directory() {
   /usr/bin/python3 - "$1" <<'PY'
@@ -299,7 +300,7 @@ PY
 
 # Production quiescence: no known sorter process may be active at the handoff seam.
 if [ "${DESKTIDY_TEST_MODE:-0}" != "1" ]; then
-  if /usr/bin/pgrep -fal 'desktop-autosort-helper|desktidy-sort' | grep -v '[m]igrate-live.sh' | grep -q .; then
+  if /usr/bin/pgrep -fal "$SORTING_PROCESS_PATTERN" | grep -q .; then
     echo "migration: a sorting process is active; retry only after it is idle" >&2
     exit 2
   fi

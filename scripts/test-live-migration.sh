@@ -8,6 +8,18 @@ trap 'rm -rf "$FIXTURE"' EXIT
 
 fail() { echo "LIVE_MIGRATION_TEST=FAIL $*" >&2; exit 1; }
 
+/usr/bin/python3 - "$MIGRATE" <<'PY'
+import re, sys
+text = open(sys.argv[1], encoding="utf-8").read()
+match = re.search(r"^SORTING_PROCESS_PATTERN='([^']+)'$", text, re.MULTILINE)
+assert match, "missing sorting process pattern"
+pattern = re.compile(match.group(1))
+assert pattern.search("/bin/bash /Users/test/Library/Application Support/DesktopAutoSort/desktop-autosort-helper")
+assert pattern.search("/Users/test/Library/Application Support/DeskTidy/desktidy-sort --once")
+assert not pattern.search("/usr/bin/pgrep -fal desktop-autosort-helper|desktidy-sort")
+assert not pattern.search("/bin/bash migrate-live.sh --app /tmp/DeskTidy.app")
+PY
+
 make_world() {
   local world="$1"
   local home="$world/home" backup="$world/backup" bundle="$world/app/Contents/Resources/Migration"
