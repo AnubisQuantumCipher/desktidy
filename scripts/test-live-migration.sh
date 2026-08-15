@@ -155,6 +155,8 @@ EOF
 cmp -s "$FIXTURE/expected-success" "$FIXTURE/success/launchctl.log" || fail "success order"
 [ -f "$FIXTURE/success/state/com.desktidy.sort" ] && [ -f "$FIXTURE/success/state/com.desktidy.notify" ] || fail "new labels absent"
 [ ! -f "$FIXTURE/success/state/com.sicarii.desktop-autosort" ] && [ ! -f "$FIXTURE/success/state/com.sicarii.desktop-autosort-notify" ] || fail "old labels remain loaded"
+[ ! -e "$FIXTURE/success/home/Library/LaunchAgents/com.sicarii.desktop-autosort.plist" ] || fail "old sorter registration still installed"
+[ ! -e "$FIXTURE/success/home/Library/LaunchAgents/com.sicarii.desktop-autosort-notify.plist" ] || fail "old notifier registration still installed"
 [ -f "$FIXTURE/success/home/Library/Application Support/DesktopAutoSort/desktop-autosort-helper" ] || fail "old files deleted"
 python3 - "$FIXTURE/success/home/Library/Application Support/DeskTidy/config.json" "$FIXTURE/success/target" <<'PY' \
   || fail "successful migration did not persist native target configuration"
@@ -226,6 +228,8 @@ EOF
 cmp -s "$FIXTURE/expected-rollback" "$FIXTURE/rollback/launchctl.log" || fail "rollback order"
 [ -f "$FIXTURE/rollback/state/com.sicarii.desktop-autosort" ] && [ -f "$FIXTURE/rollback/state/com.sicarii.desktop-autosort-notify" ] || fail "old labels not restored"
 [ ! -f "$FIXTURE/rollback/state/com.desktidy.sort" ] && [ ! -f "$FIXTURE/rollback/state/com.desktidy.notify" ] || fail "new labels survived rollback"
+[ -f "$FIXTURE/rollback/home/Library/LaunchAgents/com.sicarii.desktop-autosort.plist" ] || fail "old sorter registration not restored"
+[ -f "$FIXTURE/rollback/home/Library/LaunchAgents/com.sicarii.desktop-autosort-notify.plist" ] || fail "old notifier registration not restored"
 grep -F 'MIGRATION=ROLLED_BACK' "$FIXTURE/rollback/out" >/dev/null || fail "rollback marker"
 
 # Partial old shutdown: notifier stopped, sorter bootout fails and remains loaded.

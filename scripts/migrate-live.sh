@@ -311,6 +311,9 @@ fi
 rollback_armed=1
 "$LAUNCHCTL" bootout "gui/$UID_NUM" "$OLD_NOTIFY_PLIST"
 "$LAUNCHCTL" bootout "gui/$UID_NUM" "$OLD_SORT_PLIST"
+rm -f "$OLD_NOTIFY_PLIST" "$OLD_SORT_PLIST"
+[ ! -e "$OLD_NOTIFY_PLIST" ] && [ ! -e "$OLD_SORT_PLIST" ] \
+  || { echo "migration: legacy registrations could not be archived" >&2; exit 2; }
 rm -rf "$NEW_SUPPORT"
 mv "$STAGE/support" "$NEW_SUPPORT"
 /usr/bin/ditto "$STAGE/com.desktidy.sort.plist" "$NEW_SORT_PLIST"
@@ -324,6 +327,8 @@ if "$LAUNCHCTL" print "gui/$UID_NUM/com.sicarii.desktop-autosort" >/dev/null 2>&
   echo "migration: legacy label remained loaded" >&2
   exit 1
 fi
+[ ! -e "$OLD_SORT_PLIST" ] && [ ! -e "$OLD_NOTIFY_PLIST" ] \
+  || { echo "migration: legacy registration remained installed" >&2; exit 1; }
 rollback_armed=0
 cleanup
 trap - EXIT
