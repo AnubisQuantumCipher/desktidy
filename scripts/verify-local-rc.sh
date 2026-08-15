@@ -41,19 +41,23 @@ trap cleanup EXIT
 # Reject a malicious archive before extraction; all package entries must be relative.
 /usr/bin/python3 - "$ARCHIVE" "$MANIFEST_NAME" <<'PY'
 from pathlib import PurePosixPath
+import stat
 import sys
 import zipfile
 
 archive = sys.argv[1]
 manifest_name = sys.argv[2]
 with zipfile.ZipFile(archive) as bundle:
-    names = bundle.namelist()
+    entries = bundle.infolist()
+    names = [entry.filename for entry in entries]
 if manifest_name not in names:
     raise SystemExit("verify: archive does not contain its manifest")
-for name in names:
-    path = PurePosixPath(name)
+for entry in entries:
+    path = PurePosixPath(entry.filename)
     if path.is_absolute() or ".." in path.parts or not path.parts:
-        raise SystemExit(f"verify: unsafe archive entry: {name}")
+        raise SystemExit(f"verify: unsafe archive entry: {entry.filename}")
+    if stat.S_ISLNK(entry.external_attr >> 16):
+        raise SystemExit(f"verify: unsafe archive symlink: {entry.filename}")
 PY
 /usr/bin/unzip -q "$ARCHIVE" -d "$EXTRACT"
 cmp -s "$MANIFEST" "$EXTRACT/$MANIFEST_NAME" || {
