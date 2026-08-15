@@ -215,6 +215,10 @@ final class NativeMenuModel: ObservableObject {
             return "that movement is no longer eligible for undo."
         case .receiptUnavailable:
             return "no receipt is available."
+        case .movementBusy:
+            return "another DeskTidy movement is already in progress. Try again in a moment."
+        case .movementLockUnavailable(let code):
+            return "the movement safety lock is unavailable (error \(code)); no files were moved."
         }
     }
 }
