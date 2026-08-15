@@ -151,9 +151,11 @@ skipped verification rather than a pass.
 
 ### Restart-safe next action
 
-The exact local checkpoint is `297df4c1ac2a92dfe54d80756297820799503d37`
-on `r2/full-local-native-completion-omp`. The required Phase Q first command
-is:
+The Phase P code-and-gate checkpoint is
+`9b6097ad31ba06e9c00e2f104c9a9a82c06714b6` on
+`r2/full-local-native-completion-omp`. The handoff commit that contains this
+record follows that checkpoint; recover its exact SHA with `git rev-parse HEAD`.
+The required Phase Q first command is:
 
 ```text
 git push --set-upstream origin r2/full-local-native-completion-omp
@@ -162,6 +164,6 @@ git push --set-upstream origin r2/full-local-native-completion-omp
 On 2026-08-15 this command was denied before execution by
 `tools.approval.bash: deny`; no remote state changed. When the environment
 permits that explicitly authorized own-repository push, require macOS 14 and
-15 CI on this exact SHA, then perform the clean-clone reseal. Do not merge,
-publish, repeat real SMAppService registration, touch the live Desktop, or
-change the personal mover.
+15 CI on the pushed exact SHA, then perform the clean-clone reseal. Do not
+merge, publish, repeat real SMAppService registration, touch the live Desktop,
+or change the personal mover.
