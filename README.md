@@ -1,90 +1,108 @@
 # DeskTidy
 
-DeskTidy is a local-native macOS file-organization project. Its current tree
-contains an **ad-hoc local release candidate**, not a public release.
+DeskTidy is a local-native macOS file organizer with one guarded movement
+authority, durable receipts, and exact Undo. This repository currently supports
+an **ad-hoc local deployment** on the operator Mac; it is not a public release.
 
 ## Current status — 2026-08-15
 
-- A local arm64 macOS 14+ RC was built, packaged, and verified on an isolated
-  fixture. The package is ad-hoc signed; Gatekeeper assessed it as rejected.
-  It is **not** Developer ID signed, notarized, publicly distributed, or a
-  Homebrew release.
-- The current public Homebrew formula, if any, predates this work. Do not use
-  it as evidence for this RC and do not treat it as an installer for this tree.
-- The RC was verified only against non-Desktop fixture paths. It has not been
-  authorized to register a live service, alter a personal mover, or organize a
-  real Desktop.
-- The signed app now carries an inert migration bundle: the exact sorter,
-  notifier, launch templates, source identity, hash manifest, and a
-  transactional `migrate-live.sh`. Its default is plan-only. Fake-substrate
-  gates prove ordered handoff and automatic rollback; no live cutover has been
-  executed by this source checkpoint.
-- The shared native status surface now has fixture-bound pixels, AX controls,
-  and a required launch/capture gate. Keyboard focus traversal and spoken
-  VoiceOver output remain **INDETERMINATE**, so this is not a complete native
-  accessibility pass.
-- Historical sacrificial `SMAppService` observations do not establish
-  production migration, Login Items, FDA/TCC, reboot, or login behavior.
+- The attainable deployment claim is **local production deployment operational
+  and rollback-backed**. `com.desktidy.sort` and `com.desktidy.notify` are the
+  installed services for `/Users/sicarii/Desktop`; live readback is
+  `runningHealthy`, authority verdict `SOLE`, effective mover
+  `com.desktidy.sort`, target source `nativeConfig`, and ledger `valid(8)`.
+- The former `com.sicarii.desktop-autosort` and
+  `com.sicarii.desktop-autosort-notify` services and active registration plists
+  are absent. Their implementation and byte-verified rollback epoch are
+  retained. Never load the former sorter while DeskTidy owns the Desktop.
+- Migration persists native `config.json`, takes and verifies a bound backup of
+  any prior DeskTidy support directory, tolerates missing unrelated WatchPaths,
+  rejects same-target foreign or uninspectable authority, and uses
+  process-exact quiescence checks. The fake-substrate transaction suite passes
+  10 cases.
+- The first live run exposed a compatibility defect that moved the retained
+  `Archive`, `Docs`, `Media`, and `Projects` roots under `Folders/`. Those exact
+  directories were restored with unchanged inodes. A shared compatibility set
+  now protects all four in automatic and manual sweeps.
+- The authorized PDF canary completed an actual
+  `CanonicalApplicationCore.live().undo(receiptID:)` A→B→A cycle with identical
+  SHA-256 and inode. Its first Undo exposed an immediate automatic re-sort;
+  DeskTidy now serializes app and watcher movement through one process lock and
+  automatically preserves the exact latest Undo restoration. The repaired
+  live watcher was observed skipping that restored artifact before the canary
+  was removed.
+- The installed app and local RC are arm64/macOS 14+, ad-hoc signed, and
+  deep-signature verified. Exact-SHA hosted CI passes on macOS 14 and macOS 15.
+  Gatekeeper rejection remains expected for this local-only artifact.
+- Keyboard focus-ring traversal and spoken VoiceOver output remain
+  **INDETERMINATE**. Developer ID signing, notarization, TestFlight, App Store,
+  and a public installer/release remain **BLOCKED** on Apple Developer Program
+  access. No reboot was performed merely to manufacture evidence.
 
-Evidence: [`docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md`](docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md),
-[`docs/evidence/R2_OMP_PHASEA_INDEPENDENT_AUDIT.md`](docs/evidence/R2_OMP_PHASEA_INDEPENDENT_AUDIT.md), and
-[`docs/evidence/R2_OMP_CONTINUATION_REQUIRED.md`](docs/evidence/R2_OMP_CONTINUATION_REQUIRED.md).
+Deployment evidence:
+[`docs/evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md`](docs/evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md).
+Historical visual and implementation evidence remains under
+[`docs/evidence/`](docs/evidence/).
 
 ## Build and verify a local RC
 
 Requirements: macOS 14+, Apple Silicon, Xcode command-line tools, and a clean
-source tree. The commands below use temporary paths and do not install,
-register, launch against the Desktop, or request permissions.
+source tree. These commands build only under `/private/tmp`; they do not install
+or register services.
 
 ```bash
-scripts/build-app.sh /private/tmp/desktidy-build/DeskTidy.app
-scripts/package-local-rc.sh /private/tmp/desktidy-build/DeskTidy.app /private/tmp/desktidy-dist
+scripts/build-app.sh /private/tmp/desktidy-build
+scripts/package-local-rc.sh \
+  /private/tmp/desktidy-build/DeskTidy.app \
+  /private/tmp/desktidy-dist
 scripts/verify-local-rc.sh \
   /private/tmp/desktidy-dist/DeskTidy-local-rc-arm64-macos14.zip \
   /private/tmp/desktidy-dist/DeskTidy-local-rc-manifest.json
 ```
 
 `verify-local-rc.sh` checks the archive manifest, rejects unsafe archive paths
-and symlinks before extraction, performs a fixture smoke, and records the
-ad-hoc-signing/Gatekeeper boundary. It is local evidence only.
+and symlinks before extraction, validates the icon and migration bundle,
+verifies the ad-hoc signature, and performs a fresh fixture smoke. It is local
+evidence only.
 
 ## Product safety model
 
-The local RC's guarded movement core is tested on disposable fixture roots:
-
-- one canonical movement authority; foreign, ambiguous, or invalid authority
-  state refuses movement;
-- deterministic routes and collision-safe names; no overwrite path;
-- append-only receipt records with SHA-256 chaining, crash reconciliation, and
-  bounded history/Undo queries;
-- receipt-derived notifications, collision-safe Undo, and bounded App Intents
-  are local-RC source capabilities with hermetic contracts, not a claim of
-  live macOS service integration;
-- suggestion outputs are non-mutating. They never authorize an automatic move.
-
-The receipt chain is **unkeyed integrity evidence**, not authentication.
+- One canonical movement authority; foreign, ambiguous, invalid-target, or
+  damaged-ledger state refuses movement.
+- One cross-process movement lock serializes watcher, Tidy Now, and Undo
+  transactions. Concurrent movement does not race receipt reconciliation.
+- Deterministic routes and collision-safe names; no overwrite path.
+- Append-only receipt records with SHA-256 chaining, crash reconciliation, and
+  bounded history/Undo queries. The chain is unkeyed integrity evidence, not
+  authentication.
+- Undo restores only the exact receipt-bound artifact into an empty original
+  slot. Automatic sweeps preserve that exact restoration; explicit Tidy Now is
+  the user-authorized override.
+- `Archive`, `Docs`, `Media`, and `Projects` are migration compatibility roots
+  and remain at the watched root.
+- Receipt-derived notifications are best effort and never define movement
+  truth. An unbundled caller skips native notification setup safely.
+- Smart-triage suggestions are non-mutating and never authorize a move.
 
 ## Explicit non-claims
 
-This repository does not currently provide a public installer, public release,
-Homebrew update, notarization, Developer ID signing, live service registration,
-Login Items confirmation, FDA/TCC confirmation, reboot/login proof, a complete
-keyboard/VoiceOver accessibility pass, or a verified no-network binary audit. Optional
-future update checks are absent from this RC.
+This repository does not provide a Developer ID-signed or notarized build,
+public DMG, public installer, Homebrew update, TestFlight/App Store release,
+complete keyboard/VoiceOver acceptance, or verified reboot/login persistence.
+The local deployment does not imply public distribution readiness.
 
 ## Repository map
 
-- [`docs/RELEASE_PLAN.md`](docs/RELEASE_PLAN.md) — requirements and release
-  gates; not a completed-release declaration.
+- [`docs/RELEASE_PLAN.md`](docs/RELEASE_PLAN.md) — implemented local boundary
+  and remaining release gates.
 - [`docs/R0_AUTHORITY_AND_RECEIPTS.md`](docs/R0_AUTHORITY_AND_RECEIPTS.md) —
-  movement authority and receipts design.
+  movement authority and receipt design.
 - [`docs/ML_AUTHORITY_POLICY.md`](docs/ML_AUTHORITY_POLICY.md) — strict
   suggestion/action boundary.
-- [`docs/evidence/`](docs/evidence/) — bounded observations and their limits.
-- [`website/`](website/) — website source only. This phase does not deploy it.
-- [`scripts/claims-scan.py`](scripts/claims-scan.py) — inventories configured
-  active and excluded documentation surfaces; its contract and mutation control
-  are in `scripts/test-claims-scan.sh`.
+- [`docs/evidence/`](docs/evidence/) — observations, scars, and claim limits.
+- [`website/`](website/) — website source; no deployment is claimed.
+- [`scripts/claims-scan.py`](scripts/claims-scan.py) — public-claim inventory
+  and mutation control.
 
 ## Security reports
 

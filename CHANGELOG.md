@@ -2,19 +2,26 @@
 
 ## Unreleased — R2 local native RC (not a public release)
 
-- Local checkpoints add the fixture-gated native configuration model, pause and
-  status controls, receipt-derived notifications, collision-safe Undo, bounded
-  history/WhereDidItGo queries, bounded App Intents, lifecycle modeling, and a
-  finite hostile campaign. These are source and hermetic-fixture contracts.
-- An arm64 macOS 14+ app was packaged locally with ad-hoc signing and a
-  manifest. Gatekeeper rejection is expected for this local evidence. There is
-  no Developer ID signature, notarization, public release, Homebrew update, or
-  authorization to install/register against a real Desktop.
-- Visual and accessibility verification is **INDETERMINATE**: no direct menu
-  pixels or accessibility tree were captured without forbidden permission
-  interaction. See `docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md`.
-- The historical R1B sacrificial observation remains historical evidence only;
-  it does not prove production migration, Login Items, FDA/TCC, or reboot/login.
+- The authorized local migration replaced the active personal Desktop sorter
+  with `com.desktidy.sort` and `com.desktidy.notify`, persisted native config,
+  removed old active registration plists, and retained byte-verified rollback
+  assets. Direct state is `SOLE` / `runningHealthy`; this is a local deployment,
+  not a public release.
+- Migration transaction controls now cover 10 cases, including bound prior
+  support backup/restore, missing unrelated WatchPaths, process-exact
+  quiescence, old-plist removal, and rollback after partial shutdown.
+- `Archive`, `Docs`, `Media`, and `Projects` are shared compatibility roots for
+  automatic and manual sweeps after exact live restoration of those directories.
+- Watcher, Tidy Now, and Undo share one cross-process movement lock. Automatic
+  sweeps preserve the exact latest durable Undo restoration; damaged-ledger
+  startup fails closed. The named live canary completed a stable actual-core
+  A→B→A cycle and was removed only after its evidence was recorded.
+- The installed arm64 macOS 14+ app remains ad-hoc signed. Gatekeeper rejection
+  is expected. Developer ID signing, notarization, TestFlight/App Store, public
+  release, and Homebrew update remain absent.
+- Direct pixels and AX controls exist, but keyboard focus traversal and spoken
+  VoiceOver output remain **INDETERMINATE**. Historical sacrificial evidence
+  does not prove Login Items, FDA/TCC, reboot, or login behavior.
 
 ## Unreleased (branch r1b/phase1b-sacrificial-observation — stacked on Phase 1A.1, non-final)
 

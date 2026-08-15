@@ -1,33 +1,53 @@
 # DeskTidy — Reduced Release Plan (dependency-ordered)
 
-_2026-08-14. Supersedes the implementation ordering implied by earlier roadmap
+_Updated 2026-08-15. Supersedes the implementation ordering implied by earlier roadmap
 drafts. Rule: the first native release earns trust before anything earns
 breadth. Every feature ships only when its **gate** — an executable check —
 passes. Nothing is "done" because it compiles or because an API exists._
  
-## Current local-RC boundary
+## Current local deployment boundary
 
-The R2 local RC is an ad-hoc Apple Silicon macOS 14+ package tested on
-non-Desktop fixtures. It is not a public release, Homebrew update, Developer
-ID-signed/notarized artifact, or evidence that live service/Desktop migration
-has run. The app contains a plan-first, explicit-execute migration transaction
-with fake-substrate rollback gates; the live cutover remains a separate
-operator-authorized observation.
-Its Phase N visual/accessibility lane is **INDETERMINATE**, so the release bar
-below is not met. Historical sacrificial `SMAppService` evidence does not prove
-production migration, Login Items/FDA/TCC, reboot, or login behavior.
+The R2 artifact is an ad-hoc Apple Silicon macOS 14+ local deployment. On the
+operator Mac, the authorized transaction migrated `/Users/sicarii/Desktop`
+from the retained personal sorter to `com.desktidy.sort` and
+`com.desktidy.notify`. Direct readback is `SOLE`, `runningHealthy`,
+`targetSource=nativeConfig`, and a valid receipt chain. The former labels and
+active plists are absent; byte-verified rollback assets remain retained.
+
+The local deployment is operational and rollback-backed, not a public release,
+Homebrew update, Developer ID-signed/notarized artifact, TestFlight/App Store
+build, or public installer. Phase N keyboard focus traversal and spoken
+VoiceOver output remain **INDETERMINATE**. Historical sacrificial
+`SMAppService` evidence still does not prove Login Items/FDA/TCC, reboot, or
+login behavior, and no reboot was performed for this seal.
+
+The live transaction and its defects are not presented as a smooth cutover:
+
+1. three fail-closed attempts exposed prior-support, unrelated WatchPath, and
+   process-self-match defects before the successful handoff;
+2. the first live sweep moved retained `Archive`, `Docs`, `Media`, and
+   `Projects` roots; those exact directories were restored and are now
+   protected in automatic and manual sweeps;
+3. the first actual Undo restored the canary byte-for-byte, then the automatic
+   sorter re-filed it two seconds later; one shared process lock plus exact
+   durable-Undo suppression fixed the race, and the same canary then completed
+   a stable A→B→A cycle.
+
+Full evidence: [`evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md`](evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md).
 
 
 ## R0 — Pre-flight (before any app code) — ✅ IMPLEMENTED 2026-08-14
 
 | Item | Implementation | Gate (executable) |
 |---|---|---|
-| **Single-mover guard** — one authority per canonical watched root; ordinary setup/start/move paths refuse foreign overlap. The separately authorized migration path stages while unloaded, re-enumerates launch-agent watchers, boots out the old notifier and sorter before starting the new sorter and notifier, and automatically restores the bound old epoch on failure. | `AuthorityGuard` in [`src/Authority.swift`](../src/Authority.swift) plus plan-first [`scripts/migrate-live.sh`](../scripts/migrate-live.sh); no live cutover is claimed | `--r0-test` controls C01–C06 plus `scripts/test-live-migration.sh` fake-substrate ordering, prior-install, foreign-authority, and rollback cases |
-| **Canonical receipts** — schema v1, one append-only JSONL ledger with SHA-256 hash chain (unkeyed: integrity evidence, not author authentication), durable prepare→move→complete protocol, deterministic crash reconciliation (`failed` / `recovered` / `indeterminate` — never invented success), single history reader for status/history and future Undo | `Receipt`, `ReceiptLedger`, `MovementService` in [`src/Receipts.swift`](../src/Receipts.swift); `--history [n] [--json]`, `--verify-ledger`; full spec in [`R0_AUTHORITY_AND_RECEIPTS.md`](R0_AUTHORITY_AND_RECEIPTS.md) | `--r0-test` controls C07–C19 (durability, races, syscall failure, four restart states, malformed intent, digest tamper) |
+| **Single-mover guard** — one authority per canonical watched root; ordinary setup/start/move paths refuse foreign overlap. The authorized migration path stages while unloaded, re-enumerates launch-agent watchers, boots out the old notifier and sorter before starting the new sorter and notifier, and automatically restores the bound old epoch on failure. | `AuthorityGuard` in [`src/Authority.swift`](../src/Authority.swift) plus plan-first [`scripts/migrate-live.sh`](../scripts/migrate-live.sh); the local cutover is recorded in the deployment receipt | `--r0-test` controls C01–C06 plus `scripts/test-live-migration.sh` fake-substrate ordering, prior-install, foreign-authority, and rollback cases |
+| **Canonical receipts** — schema v1, one append-only JSONL ledger with SHA-256 hash chain (unkeyed: integrity evidence, not author authentication), durable prepare→move→complete protocol, deterministic crash reconciliation (`failed` / `recovered` / `indeterminate` — never invented success), and one reader for status/history/Undo | `Receipt`, `ReceiptLedger`, `MovementService` in [`src/Receipts.swift`](../src/Receipts.swift); `--history [n] [--json]`, `--verify-ledger`; full spec in [`R0_AUTHORITY_AND_RECEIPTS.md`](R0_AUTHORITY_AND_RECEIPTS.md) | `--r0-test` controls C07–C19 plus C32–C33; Phase G covers exact Undo, replay, authority, and process-lock behavior |
 | **Movement confinement** — sources must be direct non-symlink children of the root; destinations must resolve inside the root; `..`/symlink escapes rejected before any write | `MovementService.validateConfinement` | `--r0-test` controls C20–C23 |
 | **ML authority policy adopted** ([ML_AUTHORITY_POLICY.md](ML_AUTHORITY_POLICY.md)) — probabilistic output cannot authorize movement | suggestions lane unchanged (write-only); movement service takes routes only from the deterministic classifier | `--r0-test` control C26 (a hostile suggestion file moves nothing) + C25 (Inbox fallback) |
 
-R0 exit criteria met: 31 hostile controls green, A→B→A tamper gate demonstrated
+R0 local-deployment controls: 34 hostile controls green, including compatibility
+root retention, stable automatic behavior after Undo, and invalid-ledger
+fail-closed behavior. The earlier A→B→A tamper gate was also demonstrated
 (guard mutation → C01/C02/C05/C06 fail semantically → byte-exact restore →
 green), legacy 17-check self-test unchanged, live coexistence with a foreign
 personal mover verified on a real machine without modifying it.
@@ -38,15 +58,16 @@ Scope: **one movement authority, observable and reversible.** Nothing else.
 
 | Feature | Prerequisite | Gate |
 |---|---|---|
-| Menu-bar app skeleton (MenuBarExtra, status = running/paused, live target shown) | R0 receipts | State shown matches `launchctl` truth in a scripted probe |
-| SMAppService registration (spike first: verify replacement semantics + migration from CLI plists on this hardware) | skeleton | Old plists removed exactly once; agent survives reboot; Login Items entry visible; rollback script restores CLI mode |
+| Menu-bar app skeleton (MenuBarExtra, status = running/paused, live target shown) | R0 receipts | Implemented; state matches shared effective-state and live `launchctl` readback |
+| SMAppService registration (spike first: verify replacement semantics + migration from CLI plists on this hardware) | skeleton | Not used for the local deployment; the accepted launchd labels are active, while Login Items and reboot remain unobserved |
 | Native notifications (UNUserNotificationCenter): original name, final name, destination, collision suffix, Reveal action | receipts | Notification content equals receipt content in test; delivery failure provably never blocks a move |
 | **Undo (single-step)** from receipt: reverse the last move iff source slot is still free; collision-safe; idempotent; refuses honestly otherwise | receipts | Property test: move→undo→bytes identical; undo-after-manual-interference refuses with reason |
 | **WhereDidItGo** — answer from receipts + live filesystem verification (size check before answering); plain "another process appears to have moved it" when log is silent | receipts | Test: sorter-moved file → exact path; manually-moved file → honest fallback answer |
 | Bounded App Intents: TidyNow, Pause(duration), Resume, Status, RecentMoves, WhereDidItGo | all above | Each intent exercised via `shortcuts run`; mutating intents produce receipts |
 
-**R1 exit bar:** the [release bar](#release-bar) below passes on a clean Mac,
-an upgrade Mac (CLI→app migration), and after crash/reboot/pause cycles.
+**R1 exit bar:** local migration, rollback, app relaunch, service reload, crash
+reconciliation fixtures, pause, and Undo are evidenced. The broader bar remains
+open for reboot/login and complete keyboard/VoiceOver acceptance.
 
 ## R2 — History & findability
 
