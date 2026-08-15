@@ -53,14 +53,17 @@ jobs:
           done
           mkdir "$SB/dropped-folder"; touch -t "$OLD" "$SB/dropped-folder"
           DESKTIDY_TARGET_DIR="$SB" DESKTIDY_APP_DIR="$APP" ./build/desktidy-sort --verbose
-          test -f "$SB/Images/photo.png"
-          test -f "$SB/Videos/clip.mp4"
-          test -f "$SB/Audio/song.mp3"
-          test -f "$SB/Documents/report.pdf"
-          test -f "$SB/Code/main.rs"
-          test -f "$SB/Archives/backup.zip"
+          test -f "$SB/Media/Images/photo.png"
+          test -f "$SB/Media/Videos/clip.mp4"
+          test -f "$SB/Media/Audio/song.mp3"
+          test -f "$SB/Docs/Notes-and-Misc/report.pdf"
+          test -f "$SB/Projects/Code/main.rs"
+          test -f "$SB/Archive/Misc/backup.zip"
           test -f "$SB/Inbox/mystery.xyz"
-          test -d "$SB/Folders/dropped-folder"
+          test -d "$SB/Projects/Folders/dropped-folder"
+          for obsolete in Documents Images Screenshots Videos Audio Archives Code Folders; do
+            test ! -e "$SB/$obsolete"
+          done
           echo "all routing assertions passed"
 
       - name: R0 hostile controls (authority, receipts, confinement, recovery)
