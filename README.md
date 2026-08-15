@@ -41,6 +41,8 @@ an **ad-hoc local deployment** on the operator Mac; it is not a public release.
 
 Deployment evidence:
 [`docs/evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md`](docs/evidence/R2_LOCAL_PRODUCTION_DEPLOYMENT.md).
+Production hardening evidence:
+[`docs/evidence/R2_PRODUCTION_HARDENING_2026-08-15.md`](docs/evidence/R2_PRODUCTION_HARDENING_2026-08-15.md).
 Historical visual and implementation evidence remains under
 [`docs/evidence/`](docs/evidence/).
 

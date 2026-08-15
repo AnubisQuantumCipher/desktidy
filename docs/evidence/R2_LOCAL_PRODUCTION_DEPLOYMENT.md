@@ -25,6 +25,11 @@ checkpoint above. A commit cannot embed its own SHA; final repository/app/PR
 head equality is therefore recorded in the operator handoff after this file is
 committed, built, installed, and checked.
 
+Post-seal production hardening, including the no-follow movement-lock repair,
+website write-surface retirement, and refreshed canonical/hosted verification,
+is recorded in
+[`R2_PRODUCTION_HARDENING_2026-08-15.md`](R2_PRODUCTION_HARDENING_2026-08-15.md).
+
 ## Verdict
 
 **COMPLETE for the authorized, agent-completable local deployment scope.**
