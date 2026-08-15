@@ -46,6 +46,7 @@
     {"id": "sacrificial-lifecycle", "required": true},
     {"id": "live-authority-readback", "required": true},
     {"id": "website-build", "required": true},
+    {"id": "homebrew-source-preview", "required": true},
     {"id": "hosted-final-sha", "required": true}
   ]
 }

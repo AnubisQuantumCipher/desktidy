@@ -36,11 +36,24 @@ PY
 }
 
 refuse_desktop_target "$OUT"
-if ! git -C "$REPO" diff --quiet || ! git -C "$REPO" diff --cached --quiet; then
-  echo "build: refusing a dirty source tree; commit the exact local RC source first" >&2
-  exit 2
+SOURCE_COMMIT_OVERRIDE="${DESKTIDY_SOURCE_COMMIT:-}"
+if git -C "$REPO" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  if ! git -C "$REPO" diff --quiet || ! git -C "$REPO" diff --cached --quiet; then
+    echo "build: refusing a dirty source tree; commit the exact local RC source first" >&2
+    exit 2
+  fi
+  SOURCE_COMMIT="$(git -C "$REPO" rev-parse --verify HEAD^{commit})"
+  if [ -n "$SOURCE_COMMIT_OVERRIDE" ] && [ "$SOURCE_COMMIT_OVERRIDE" != "$SOURCE_COMMIT" ]; then
+    echo "build: supplied source commit does not match checkout HEAD" >&2
+    exit 2
+  fi
+else
+  printf '%s\n' "$SOURCE_COMMIT_OVERRIDE" | grep -Eq '^[0-9a-f]{40}$' || {
+    echo "build: a 40-hex DESKTIDY_SOURCE_COMMIT is required for an archive source build" >&2
+    exit 2
+  }
+  SOURCE_COMMIT="$SOURCE_COMMIT_OVERRIDE"
 fi
-SOURCE_COMMIT="$(git -C "$REPO" rev-parse --verify HEAD^{commit})"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 MIGRATION="$APP/Contents/Resources/Migration"

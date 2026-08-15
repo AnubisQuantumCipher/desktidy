@@ -94,6 +94,11 @@ public DMG, public installer, Homebrew update, TestFlight/App Store release,
 complete keyboard/VoiceOver acceptance, or verified reboot/login persistence.
 The local deployment does not imply public distribution readiness.
 
+For the bounded ad-hoc alternative, see
+[`docs/HOMEBREW_SOURCE_PREVIEW.md`](docs/HOMEBREW_SOURCE_PREVIEW.md). It defines
+a source-built developer preview that performs no service registration and is
+not a substitute for a notarized native cask.
+
 ## Repository map
 
 - [`docs/RELEASE_PLAN.md`](docs/RELEASE_PLAN.md) — implemented local boundary

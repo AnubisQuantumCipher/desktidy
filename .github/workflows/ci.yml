@@ -103,6 +103,9 @@ jobs:
       - name: App icon bundle contract
         run: scripts/test-app-icon.sh build/DeskTidy.app
 
+      - name: Homebrew source-built preview remains non-mutating
+        run: scripts/test-homebrew-source-preview.sh
+
       - name: Migration bundle and transactional fake-substrate gates
         run: |
           scripts/test-migration-bundle.sh build/DeskTidy.app "$(git rev-parse HEAD)"

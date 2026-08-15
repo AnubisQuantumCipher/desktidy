@@ -17,6 +17,7 @@ DEFAULT_FILES = (
     "SECURITY.md",
     "CHANGELOG.md",
     "docs/RELEASE_PLAN.md",
+    "docs/HOMEBREW_SOURCE_PREVIEW.md",
     "docs/R1B_SERVICE_IDENTITY_PROPOSAL.md",
     "docs/R1B_PHASE1B_OPERATOR_RUNBOOK.md",
     "src/desktidy-cli.sh",

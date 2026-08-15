@@ -273,6 +273,13 @@ def main() -> None:
         logs,
         phase_environment,
     ))
+    records.append(run_command(
+        "homebrew-source-preview",
+        ["scripts/test-homebrew-source-preview.sh"],
+        root,
+        logs,
+        phase_environment,
+    ))
     records.append(record_static("hosted-final-sha", "blocked", "No hosted macOS 14/15 CI run is tied to this local source commit.", ["not-run", "hosted CI"]))
 
     by_id = {record["id"]: record for record in records}
