@@ -23,7 +23,8 @@ DEFAULT_FILES = (
     "skills/AGENTS-SNIPPET.md",
     "skills/desktidy-awareness/SKILL.md",
     "website/app/page.tsx",
-    "website/app/components/Faq.tsx",
+    "website/app/privacy/page.tsx",
+    "website/README.md",
     "website/WEBSITE_VERIFICATION.md",
     "website/BUSINESS_POSITIONING.md",
 )
