@@ -100,6 +100,9 @@ jobs:
             DESKTIDY_LAUNCHD_STATE_FILE="$AG2/state.json" EXPECTED_OVERALL=pausedNotLoaded \
             ./scripts/smoke-app.sh ./build/DeskTidy.app/Contents/MacOS/DeskTidy
 
+      - name: App icon bundle contract
+        run: ./scripts/test-app-icon.sh ./build/DeskTidy.app
+
       - name: Native status surface launches and captures
         run: |
           chmod +x scripts/test-native-status-surface.sh

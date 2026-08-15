@@ -164,6 +164,7 @@ case "$SIGNING_DETAILS" in
   *) echo "verify: app is not ad-hoc signed" >&2; exit 1 ;;
 esac
 codesign --verify --deep --strict "$APP"
+"$ROOT/scripts/test-app-icon.sh" "$APP"
 if spctl --assess --type execute --verbose=4 "$APP" >/dev/null 2>&1; then
   OBSERVED_GATEKEEPER="accepted"
 else
@@ -187,5 +188,5 @@ LAST_LINE="$(printf '%s\n' "$SMOKE_OUTPUT" | tail -1)"
   exit 1
 }
 
-echo "verify: manifest, ad-hoc signature, and fresh /private/tmp fixture smoke passed"
+echo "verify: manifest, app icon, ad-hoc signature, and fresh /private/tmp fixture smoke passed"
 echo "verify: Gatekeeper inspection observed: $OBSERVED_GATEKEEPER (policy-dependent; packaged record retained)"

@@ -75,6 +75,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleIdentifier</key><string>com.desktidy.app</string>
     <key>CFBundleName</key><string>DeskTidy</string>
     <key>CFBundleExecutable</key><string>DeskTidy</string>
+    <key>CFBundleIconFile</key><string>DeskTidy.icns</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>1.2.0</string>
     <key>CFBundleVersion</key><string>1</string>
@@ -88,7 +89,8 @@ cat > "$APP/Contents/Resources/DeskTidyBuild.json" <<BUILDINFO
 {"sourceCommit":"$SOURCE_COMMIT","minimumMacOS":"$MACOS_MIN","architecture":"arm64","signing":"ad-hoc-local-only"}
 BUILDINFO
 
-
+"$REPO/scripts/generate-app-icon.sh" "$APP/Contents/Resources/DeskTidy.icns"
 codesign -s - -i com.desktidy.app --force "$APP"
+"$REPO/scripts/test-app-icon.sh" "$APP"
 echo "built local-only ad-hoc app: $APP"
 echo "signing: ad-hoc (-); not Developer ID signed, not notarized, and not for distribution"
