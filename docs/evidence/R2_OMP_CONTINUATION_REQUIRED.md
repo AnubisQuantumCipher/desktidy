@@ -141,10 +141,11 @@ skipped verification rather than a pass.
   /private/tmp/desktidy-full-local-release-20260815-rerun/summary.json`
   exited `2` with `overall=blocked`, not failed. Its independent validator
   accepted the summary: `valid overall=blocked gates=44`.
-- The final summary retains five missing-evidence lanes rather than converting
-  them to success: historical Phase 1B independent lifecycle acceptance and
-  Phase N visual/AX are `indeterminate`; direct install lifecycle, website
-  build dependencies, and exact-SHA hosted CI are `blocked`.
+- The final summary retains six missing-evidence lanes rather than converting
+  them to success: historical Phase 1B independent lifecycle acceptance,
+  Phase N visual/AX, and a fresh personal-mover baseline are `indeterminate`;
+  direct install lifecycle, website build dependencies, and exact-SHA hosted CI
+  are `blocked`.
 - No DeskTidy service registration, live Desktop access, personal-mover
   mutation, permission interaction, website deployment, merge, or publication
   occurred during Phase P.
