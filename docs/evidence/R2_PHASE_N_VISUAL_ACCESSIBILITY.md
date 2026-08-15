@@ -1,41 +1,81 @@
-# DeskTidy Phase N — native visual and accessibility evidence
+# DeskTidy Phase N — native status surface and accessibility evidence
 
 Date: 2026-08-15
-Artifact: `DeskTidy-local-rc-arm64-macos14.zip`
-Artifact SHA-256: `57aee31ff27bea06a83eb6b2a04acd6a6d5a4474855d38998fdfe5c528c7a549`
-Source commit embedded in the artifact: `601e8177db125ad6d36bb65a4a54eb46e81a6a91`
+Scope: fixture-bound macOS status-bar app; no live Desktop mutation
 
-## Observed
+## Mechanized evidence
 
-- The exact fixture-bound app binary was launched from
-  `/private/tmp/desktidy-phase-m-build-final/DeskTidy.app` with all DeskTidy
-  state paths directed to `/private/tmp/desktidy-phase-n`.
-- The observed process command was
-  `/private/tmp/desktidy-phase-m-build-final/DeskTidy.app/Contents/MacOS/DeskTidy`.
-- A host screenshot was captured at `/private/tmp/desktidy-phase-n-menu.png`.
-  It showed the foreground terminal, not a visible DeskTidy menu extra.
-- No accessibility-tree API is available in this environment without invoking
-  a system Automation/Accessibility permission path. That path was not invoked
-  because Phase N forbids interacting with permission dialogs.
+- `scripts/test-native-status-surface.sh` launches the exact built
+  `DeskTidy.app` through LaunchServices with every DeskTidy path under
+  `/private/tmp`, selects `--ui-preview`, requires one CoreGraphics window
+  titled `DeskTidy Status Preview`, captures that exact window, hashes it, and
+  terminates the process.
+- `scripts/window-probe.swift` performs the window-owner/title/bounds check
+  without Automation or Accessibility permission.
+- `scripts/full-local-release-gates.json` includes required gate
+  `native-status-surface`; `scripts/run-full-local-release-gate.py` executes it
+  only after `app-build` passes and retains the PNG in the gate work directory.
+- The sealed fixture capture is
+  `docs/evidence/assets/R2_PHASE_N_STATUS_SURFACE.png`.
+- SHA-256:
+  `487d1e8d9fb714815ebf0bb028d7909f6f2e73c8fdd482995f8a91b8fbb25936`.
+- The expanded R1A policy tests prove that onboarding, busy, foreign-conflict,
+  ambiguous, and degraded-ledger states expose no movement controls; healthy
+  state exposes Tidy/Pause/eligible Undo; durable pause exposes Resume only.
+- Phase H tests prove that a validated reversal receipt is presented as
+  `Restored` with live status `present`, rather than as an unsafe forward move.
 
-## Verdict
+## Directly observed fixture matrix
 
-**INDETERMINATE — no direct menu pixels or accessibility tree were observed.**
+The same `NativeMenuContent` used by `MenuBarExtra` was observed through the
+preview scene with `computer_use` pixels and AX controls:
 
-This is not a visual or VoiceOver pass. The source has accessibility labels,
-but source inspection is not substituted for live accessibility evidence.
+- onboarding: neutral tray, `Not running — agent not loaded`, folder setup only;
+- healthy: green tray, sole authority, running agent, Tidy Now and Pause;
+- Tidy Now: `invoice.pdf` moved to `Documents/invoice.pdf` and a validated Undo
+  control appeared;
+- Undo: the original root path returned, the destination disappeared, and the
+  reversal row displayed `Restored · Current item verified`;
+- paused: filled pause icon, `Paused — file movement is disabled`, Resume only;
+- resumed: durable pause state returned to `running`;
+- foreign conflict: long owner label wrapped and no movement controls appeared;
+- unreadable agent definition: light appearance, exact ambiguity reason, no
+  movement controls;
+- tampered ledger: high-contrast dark appearance, exact digest failure, history
+  unavailable, no movement controls.
 
-## Unverified fixture states
+The fixture movement and reversal both preserved SHA-256
+`a842ff97b17be0ff9ca00c7198ba3efe30365ab19c5203a9234f4a2e34f82115`.
 
-No direct visual/accessibility evidence exists for healthy, paused, foreign
-conflict, ambiguous configuration, degraded ledger, migration/rollback,
-permission unavailable, empty/populated activity, undo eligibility,
-notification unavailable, long names, light/dark/high-contrast, keyboard
-navigation, or VoiceOver labels.
+The normal, non-preview app was also launched without `open -g`; a new tray icon
+appeared in the real macOS menu bar and disappeared when that exact fixture PID
+was terminated. `open -g` suppressed first presentation and is not the normal
+interactive launch path.
+
+## Claim boundary
+
+**PARTIAL — native status surface is mechanized; full accessibility remains
+indeterminate.**
+
+Verified: a built app presents the shared native status content, captures into
+a non-empty image, exports labelled AX buttons in direct inspection, fails
+closed across adverse states, and performs/undoes a fixture move byte-exactly.
+
+Unverified:
+
+- direct click-through of the production `MenuBarExtra` popup, because the
+  desktop driver cannot bind an `LSUIElement` process with no ordinary window;
+- keyboard focus-ring traversal, because host Full Keyboard Access was disabled
+  and was not changed globally;
+- spoken VoiceOver output;
+- notification-permission UI and migration/rollback UI pixels.
+
+Therefore the broad canonical `visual-accessibility` gate remains
+`indeterminate`; the narrower `native-status-surface` gate is executable and may
+pass. Source labels are not substituted for the unobserved accessibility lanes.
 
 ## Safety
 
-The fixture launch did not use the live Desktop, did not invoke an app action,
-did not click a permission dialog, and did not register a service or alter the
-personal mover. The image and the fixture are temporary artifacts, not release
-evidence beyond the stated process observation.
+All movement used `/private/tmp/desktidy-visual-*` fixtures. No test targeted the
+live Desktop, registered a service, changed global accessibility settings,
+clicked a permission dialog, or unloaded/restarted the personal mover.

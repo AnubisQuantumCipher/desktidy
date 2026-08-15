@@ -119,7 +119,7 @@ final class CanonicalHistoryQuery {
         let originalName = pathComponent(of: receipt.sourceRel)
         let final = receipt.finalDestRel
         let finalName = final.flatMap(pathComponent(of:))
-        let category = final.flatMap(categoryComponent(of:))
+        let category = receipt.reversesReceiptID == nil ? final.flatMap(categoryComponent(of:)) : "Restored"
         let timestamp = receipt.completedAt ?? receipt.preparedAt
         var unknown = [String]()
         if originalName == nil { unknown.append("originalName") }
@@ -187,7 +187,7 @@ final class CanonicalHistoryQuery {
         guard receipt.rootCanonical == movement.rootCanonical.path,
               receipt.outcome == "moved" || receipt.outcome == "recovered",
               let final = receipt.finalDestRel,
-              let destination = confinedDestination(final) else {
+              let destination = confinedDestination(final, allowsRootLevel: receipt.reversesReceiptID != nil) else {
             return .invalidDestination
         }
         guard fm.fileExists(atPath: destination.path) else { return .missing }
@@ -195,16 +195,19 @@ final class CanonicalHistoryQuery {
         return FileArtifactIdentity.capture(at: destination) == identity ? .present : .changed
     }
 
-    private func confinedDestination(_ relative: String) -> URL? {
+    private func confinedDestination(_ relative: String, allowsRootLevel: Bool) -> URL? {
         let components = relative.split(separator: "/", omittingEmptySubsequences: false)
-        guard components.count == 2,
+        let expectedCount = allowsRootLevel ? 1 : 2
+        guard components.count == expectedCount,
               components.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." }) else {
             return nil
         }
         let destination = movement.root.appendingPathComponent(relative)
         let parent = destination.deletingLastPathComponent()
-        guard AuthorityGuard.canonicalize(parent.deletingLastPathComponent().path) == movement.rootCanonical,
-              !isSymbolicLink(parent), !isSymbolicLink(destination) else {
+        let rootBoundary = allowsRootLevel ? parent : parent.deletingLastPathComponent()
+        guard AuthorityGuard.canonicalize(rootBoundary.path) == movement.rootCanonical,
+              !isSymbolicLink(destination),
+              allowsRootLevel || !isSymbolicLink(parent) else {
             return nil
         }
         return destination

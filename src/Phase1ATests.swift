@@ -95,7 +95,7 @@ final class Phase1ATests {
               fake.calls == [.status("com.desktidy.sacrificial"), .register("com.desktidy.sacrificial")])
 
         let refused = SMAdapterSelection.forAutomatedTests()
-        var orch = MigrationOrchestrator(adapter: refused)
+        let orch = MigrationOrchestrator(adapter: refused)
         let tx = orch.attempt(
             intent: .beginRegistration, evidence: ev(cli: true, app: true, enabled: true),
             authData: nil, context: dummyCtx(), plistName: "com.desktidy.sacrificial",
@@ -223,7 +223,7 @@ final class Phase1ATests {
         junk.append(contentsOf: Data(" true".utf8))
         check("I16", "trailing non-whitespace refuses",
               { if case .refuse = eval(junk, ctx: ctx) { return true }; return false }())
-        var missingRoot = dummyCtx(exists: false, desktop: desk.canon)
+        let missingRoot = dummyCtx(exists: false, desktop: desk.canon)
         check("I17", "missing sacrificial directory refuses",
               { if case .refuse = eval(good, ctx: missingRoot) { return true }; return false }())
         check("I18", "notify personal label also refuses",
@@ -250,7 +250,7 @@ final class Phase1ATests {
                  atCall: MigrationEvidence? = nil, adapter: FakeSMAdapter,
                  skipSecond: Bool = false, expect: MigrationOutcome,
                  registerCalls: Int? = nil, unregisterCalls: Int? = nil) {
-            var orch = MigrationOrchestrator(adapter: adapter, skipSecondPreCallCheck: skipSecond)
+            let orch = MigrationOrchestrator(adapter: adapter, skipSecondPreCallCheck: skipSecond)
             let tx = orch.attempt(
                 intent: intent, evidence: evidence, evidenceAtCall: atCall,
                 authData: auth, context: ctx, plistName: plist,
@@ -365,8 +365,11 @@ final class Phase1ATests {
               !stripped.contains(smAPI + ".register") && !stripped.contains(smAPI + ".unregister"))
         check("W03", "future sacrificial label is not a production self label",
               !ProductIdentity.selfLabels.contains("com.desktidy.sacrificial"))
-        check("W04", "test adapter factory returns FakeSMAdapter",
-              SMAdapterSelection.forAutomatedTests() is FakeSMAdapter)
+        let isolated = SMAdapterSelection.forAutomatedTests()
+        check("W04", "test adapter factory starts isolated",
+              isolated.calls.isEmpty
+                && isolated.registerCount == 0
+                && isolated.unregisterCount == 0)
     }
 }
 

@@ -128,7 +128,7 @@ def main() -> None:
     if args.dry_run:
         for identifier in gate_ids:
             if identifier == "visual-accessibility":
-                records.append(record_static(identifier, "indeterminate", "Phase N has no direct menu pixels or accessibility tree.", ["evidence", "docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md"]))
+                records.append(record_static(identifier, "indeterminate", "Direct surface pixels exist, but keyboard focus and VoiceOver output remain unobserved.", ["evidence", "docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md"]))
             elif identifier in {"sacrificial-lifecycle", "hosted-final-sha", "website-build"}:
                 records.append(record_static(identifier, "blocked", "Prerequisite deliberately unavailable in dry run.", ["not-run", identifier]))
             else:
@@ -213,7 +213,23 @@ def main() -> None:
             records.append(run_command(identifier, command, root, logs, phase_environment))
 
     records.append(run_command("app-build", ["scripts/build-app.sh", str(work)], root, logs, phase_environment))
-    if records[-1]["status"] == "passed":
+    app_build = records[-1]
+    if app_build["status"] == "passed":
+        records.append(run_command(
+            "native-status-surface",
+            ["scripts/test-native-status-surface.sh", str(app), str(work / "visual-accessibility.png")],
+            root,
+            logs,
+            phase_environment,
+        ))
+    else:
+        records.append(record_static(
+            "native-status-surface",
+            "blocked",
+            "App build failed; native status surface was not launched.",
+            ["scripts/test-native-status-surface.sh", str(app)],
+        ))
+    if app_build["status"] == "passed":
         records.append(run_command("local-rc-package", ["scripts/package-local-rc.sh", str(app), str(dist)], root, logs, phase_environment))
     else:
         records.append(record_static("local-rc-package", "blocked", "App build failed; packaging was not attempted.", ["scripts/package-local-rc.sh", str(app), str(dist)]))
@@ -230,7 +246,7 @@ def main() -> None:
 
     evidence = root / "docs/evidence/R2_OMP_PHASEA_INDEPENDENT_AUDIT.md"
     records.append(record_static("phase1b-evidence", "indeterminate", "Independent audit retains the historical lifecycle record as non-reproducible evidence.", ["evidence", str(evidence)]))
-    records.append(record_static("visual-accessibility", "indeterminate", "Phase N has no direct menu pixels or accessibility tree.", ["evidence", "docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md"]))
+    records.append(record_static("visual-accessibility", "indeterminate", "Direct surface pixels and AX controls were observed, but keyboard focus and VoiceOver output remain unobserved.", ["evidence", "docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md"]))
     records.append(record_static("sacrificial-lifecycle", "blocked", "No direct install/upgrade/uninstall occurred; only plan-only lifecycle controls were run.", ["not-run", "direct local lifecycle"] ))
 
     uid = str(os.getuid())

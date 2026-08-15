@@ -80,8 +80,8 @@ final class PhaseHTests {
         runWhereDidItGoLivenessContract()
         runDuplicateAndUnicodeQueryContract()
         runOlderReceiptUndoContract()
-
         runTamperAndNoCacheContract()
+        runHostileReversalDestinationContract()
         print("PHASE H GATES: \(pass) passed, \(fail) failed")
         return pass > 0 && fail == 0
     }
@@ -119,6 +119,7 @@ final class PhaseHTests {
         let history = f.core.history(page: 0, limit: 20)
         let firstEntry = history.entries.first { $0.receipt.id == first.id }
         let secondEntry = history.entries.first { $0.receipt.id == second.id }
+        let reversalEntry = history.entries.first { $0.receipt.reversesReceiptID == first.id }
         check(
             "H02",
             "ledger history reconstructs collision and undo entries with display metadata",
@@ -129,8 +130,12 @@ final class PhaseHTests {
                 && firstEntry?.timestamp != nil
                 && firstEntry?.mover == "com.desktidy.sort"
                 && undo.outcome == .completed
-                && firstEntry?.undoEligible == false,
-            "first=\(String(describing: firstEntry)), second=\(String(describing: secondEntry)), undo=\(undo.outcome)"
+                && firstEntry?.undoEligible == false
+                && reversalEntry?.originalName == "invoice.pdf"
+                && reversalEntry?.finalName == "invoice.pdf"
+                && reversalEntry?.category == "Restored"
+                && reversalEntry?.liveStatus == .present,
+            "first=\(String(describing: firstEntry)), second=\(String(describing: secondEntry)), reversal=\(String(describing: reversalEntry)), undo=\(undo.outcome)"
         )
     }
 
@@ -190,6 +195,58 @@ final class PhaseHTests {
             "receipt-ID undo searches the full validated bounded ledger rather than the visible history page",
             undo.outcome == .completed,
             "undo=\(undo.outcome)"
+        )
+    }
+
+    private func runHostileReversalDestinationContract() {
+        let f = fixture()
+        defer { try? fm.removeItem(at: f.sandbox) }
+        let moved = move("invoice.pdf", contents: "hostile-reversal", in: f)
+        let undo = f.core.undo(receiptID: moved.id)
+        guard let reversal = f.core.history(page: 0, limit: 20).entries
+            .first(where: { $0.receipt.reversesReceiptID == moved.id })?.receipt else {
+            fatalError("reversal fixture missing")
+        }
+
+        let documents = f.root.appendingPathComponent("Documents", isDirectory: true)
+        try! fm.createDirectory(at: documents, withIntermediateDirectories: true)
+        try! fm.copyItem(
+            at: f.root.appendingPathComponent("invoice.pdf"),
+            to: documents.appendingPathComponent("invoice.pdf")
+        )
+
+        var nested = reversal
+        nested.id = "forged-reversal-nested"
+        nested.finalDestRel = "Documents/invoice.pdf"
+        try! f.core.movement.ledger.append(nested)
+
+        var traversal = reversal
+        traversal.id = "forged-reversal-traversal"
+        traversal.finalDestRel = "../escape.pdf"
+        try! f.core.movement.ledger.append(traversal)
+
+        let symlink = f.root.appendingPathComponent("invoice-link.pdf")
+        try! fm.createSymbolicLink(
+            at: symlink,
+            withDestinationURL: f.root.appendingPathComponent("invoice.pdf")
+        )
+        var linked = reversal
+        linked.id = "forged-reversal-symlink"
+        linked.finalDestRel = "invoice-link.pdf"
+        try! f.core.movement.ledger.append(linked)
+
+        let history = f.core.history(page: 0, limit: 20)
+        func status(_ id: String) -> CanonicalHistoryLiveStatus? {
+            history.entries.first(where: { $0.receipt.id == id })?.liveStatus
+        }
+        check(
+            "H07",
+            "reversal root exception rejects nested, traversal, and symlink destinations",
+            undo.outcome == .completed
+                && status(nested.id) == .invalidDestination
+                && status(traversal.id) == .invalidDestination
+                && status(linked.id) == .invalidDestination,
+            "nested=\(String(describing: status(nested.id))), traversal=\(String(describing: status(traversal.id))), symlink=\(String(describing: status(linked.id)))"
         )
     }
 

@@ -54,7 +54,7 @@ Summary SHA-256: `31ac1ee37018f67564961165fe6d63daacd4756c4ded41d51717b93ef1e4e8
 The six non-pass records remained visible:
 
 - `phase1b-evidence`: indeterminate; the historical raw lifecycle is not reproducible.
-- `visual-accessibility`: indeterminate; no attributable native menu pixels or AX tree were obtained.
+- `visual-accessibility`: indeterminate at this checkpoint; no attributable native menu pixels or AX tree were obtained. Current-branch evidence supersedes that observation in `R2_PHASE_N_VISUAL_ACCESSIBILITY.md` without rewriting the historical result.
 - `sacrificial-lifecycle`: blocked; direct install/upgrade/uninstall was not repeated.
 - `live-authority-readback`: indeterminate in the canonical runner; a separate fresh read-only baseline confirmed the personal sorter and notifier remained loaded.
 - `website-build`: blocked in the canonical runner because dependencies were absent at gate start; the detached clean-clone build below subsequently passed.

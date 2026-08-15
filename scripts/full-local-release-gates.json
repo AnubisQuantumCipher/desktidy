@@ -28,6 +28,7 @@
     {"id": "phasel-contracts", "required": true},
     {"id": "phasel-campaign", "required": true},
     {"id": "app-build", "required": true},
+    {"id": "native-status-surface", "required": true},
     {"id": "local-rc-package", "required": true},
     {"id": "local-rc-verify", "required": true},
     {"id": "archive-symlink-control", "required": true},

@@ -25,6 +25,7 @@ final class NativeMenuModel: ObservableObject {
     @Published private(set) var lifecycle: CanonicalLifecycleStatus
     @Published private(set) var lastCommandMessage: String?
     @Published private(set) var movementHistory: CanonicalMovementHistory
+    @Published private(set) var isBusy = false
 
     private var core: CanonicalApplicationCore
 
@@ -54,13 +55,53 @@ final class NativeMenuModel: ObservableObject {
     }
 
     func pause() {
+        guard controls.canPause else {
+            lastCommandMessage = "Pause is unavailable in the current state."
+            return
+        }
         record(core.pause())
         refresh()
     }
 
     func resume() {
+        guard controls.canResume else {
+            lastCommandMessage = "Resume is unavailable in the current state."
+            return
+        }
         record(core.resume())
         refresh()
+    }
+
+    func tidyNow() {
+        guard controls.canTidyNow else {
+            lastCommandMessage = "Tidy Now is unavailable in the current state."
+            return
+        }
+        isBusy = true
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            let result = self.core.tidyNow()
+            self.record(result)
+            self.isBusy = false
+            self.refresh()
+        }
+    }
+
+    func undo(receiptID: String) {
+        guard controls.canUndo else {
+            lastCommandMessage = "Undo is unavailable in the current state."
+            return
+        }
+        isBusy = true
+        Task { @MainActor [weak self] in
+            await Task.yield()
+            guard let self else { return }
+            let result = self.core.undo(receiptID: receiptID)
+            self.record(result)
+            self.isBusy = false
+            self.refresh()
+        }
     }
 
     func replaceCore(with replacement: CanonicalApplicationCore, retaining message: String?) {
@@ -75,6 +116,25 @@ final class NativeMenuModel: ObservableObject {
 
     func hasRevealableReceipts() -> Bool {
         !core.history().receipts.isEmpty || !core.commandHistory().isEmpty
+    }
+
+    var setupRequired: Bool {
+        switch (configuration, target) {
+        case (.missing, _), (.invalid, _), (_, .invalid), (_, .unavailable):
+            return true
+        case (.configured, .available):
+            return false
+        }
+    }
+
+    var controls: NativeMenuControls {
+        EffectiveState.nativeMenuControls(
+            for: effectiveState.effective,
+            setupRequired: setupRequired,
+            isPaused: effectiveState.isPaused,
+            hasUndoEligible: movementHistory.entries.contains(where: \.undoEligible),
+            isBusy: isBusy
+        )
     }
 
     private func refreshTarget() {
@@ -104,8 +164,33 @@ final class NativeMenuModel: ObservableObject {
             lastCommandMessage = "DeskTidy refused \(result.command.rawValue): \(describe(refusal))"
             return
         }
-        let receipt = result.receiptID.map { " Receipt \($0)." } ?? ""
-        lastCommandMessage = "\(result.command.rawValue) \(result.outcome.rawValue).\(receipt)"
+        switch result.command {
+        case .setTarget:
+            lastCommandMessage = "Folder updated."
+        case .pause:
+            lastCommandMessage = "DeskTidy paused."
+        case .resume:
+            lastCommandMessage = "DeskTidy resumed."
+        case .undo:
+            lastCommandMessage = "Undo completed."
+        case .tidyNow:
+            lastCommandMessage = "Tidy Now completed."
+        }
+    }
+
+    private func record(_ result: CanonicalTidyNowResult) {
+        if let refusal = result.refusal {
+            let prefix = result.moved.isEmpty ? "Tidy Now was refused" : "Tidied \(result.moved.count) item(s), then stopped"
+            lastCommandMessage = "\(prefix): \(describe(refusal))"
+        } else if !result.failed.isEmpty {
+            lastCommandMessage = "Tidied \(result.moved.count) item(s); \(result.failed.count) failed."
+        } else if !result.moved.isEmpty {
+            lastCommandMessage = "Tidied \(result.moved.count) item(s)."
+        } else if result.skippedFresh > 0 {
+            lastCommandMessage = "Nothing moved; \(result.skippedFresh) item(s) are still settling."
+        } else {
+            lastCommandMessage = "Everything is already tidy."
+        }
     }
 
     private func describe(_ refusal: CanonicalCoreRefusal) -> String {
@@ -126,8 +211,8 @@ final class NativeMenuModel: ObservableObject {
             return reason
         case .invalidTarget(let path):
             return "\(path) is not an available folder."
-        case .invalidReceipt(let id):
-            return "receipt \(id) is invalid."
+        case .invalidReceipt:
+            return "that movement is no longer eligible for undo."
         case .receiptUnavailable:
             return "no receipt is available."
         }
@@ -162,7 +247,6 @@ final class DeskTidyApplicationBoundary: ObservableObject {
     }
 }
 
-@main
 struct DeskTidyApp: App {
     @StateObject private var boundary: DeskTidyApplicationBoundary
 
@@ -193,10 +277,50 @@ struct DeskTidyApp: App {
         MenuBarExtra {
             NativeMenuContent(boundary: boundary)
         } label: {
-            Image(systemName: EffectiveState.menuBarSymbol(for: boundary.model.effectiveState.effective.overall))
+            Image(systemName: EffectiveState.menuBarSymbol(
+                for: boundary.model.effectiveState.effective.overall,
+                isPaused: boundary.model.effectiveState.isPaused
+            ))
                 .accessibilityLabel("DeskTidy status")
         }
         .menuBarExtraStyle(.window)
+    }
+}
+
+struct DeskTidyPreviewApp: App {
+    @StateObject private var boundary: DeskTidyApplicationBoundary
+
+    init() {
+        _boundary = StateObject(
+            wrappedValue: DeskTidyApplicationBoundary(coreFactory: { CanonicalApplicationCore.live() })
+        )
+        NSApplication.shared.setActivationPolicy(.regular)
+        if CommandLine.arguments.contains("--ui-preview-light") {
+            NSApplication.shared.appearance = NSAppearance(named: .aqua)
+        } else if CommandLine.arguments.contains("--ui-preview-high-contrast") {
+            NSApplication.shared.appearance = NSAppearance(named: .accessibilityHighContrastDarkAqua)
+        }
+        DispatchQueue.main.async {
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
+    }
+
+    var body: some Scene {
+        Window("DeskTidy Status Preview", id: "status-preview") {
+            NativeMenuContent(boundary: boundary)
+        }
+        .windowResizability(.contentSize)
+    }
+}
+
+@main
+enum DeskTidyBootstrap {
+    static func main() {
+        if CommandLine.arguments.contains("--ui-preview") {
+            DeskTidyPreviewApp.main()
+        } else {
+            DeskTidyApp.main()
+        }
     }
 }
 
@@ -212,14 +336,8 @@ struct NativeMenuContent: View {
 
     private var report: EffectiveStateReport { model.effectiveState.effective }
     private var conflict: Bool { report.overall == .foreignConflict }
-    private var setupRequired: Bool {
-        switch (model.configuration, model.target) {
-        case (.missing, _), (.invalid, _), (_, .invalid), (_, .unavailable):
-            return true
-        case (.configured, .available):
-            return false
-        }
-    }
+    private var setupRequired: Bool { model.setupRequired }
+    private var controls: NativeMenuControls { model.controls }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -233,7 +351,7 @@ struct NativeMenuContent: View {
                     .font(.system(size: 10.5))
                     .foregroundStyle(conflict ? .orange : .secondary)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityLabel("Configuration result: \(message)")
+                    .accessibilityLabel("DeskTidy result: \(message)")
             }
             if conflict {
                 Text("DeskTidy will not sort this folder while another automation owns it. DeskTidy cannot disable that automation; choose a different folder or use its own controls.")
@@ -259,20 +377,20 @@ struct NativeMenuContent: View {
 
     private var headline: some View {
         HStack(spacing: 8) {
-            Image(systemName: EffectiveState.menuBarSymbol(for: report.overall))
+            Image(systemName: EffectiveState.menuBarSymbol(
+                for: report.overall,
+                isPaused: model.effectiveState.isPaused
+            ))
                 .foregroundStyle(color(for: report.overall))
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text(headlineStatus)
+                Text(EffectiveState.statusLine(for: report, isPaused: model.effectiveState.isPaused))
                     .font(.system(size: 12, weight: .semibold))
                     .fixedSize(horizontal: false, vertical: true)
-                Text(lifecycleDescription)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("DeskTidy status: \(headlineStatus). \(lifecycleDescription)")
+        .accessibilityLabel("DeskTidy status: \(EffectiveState.statusLine(for: report, isPaused: model.effectiveState.isPaused))")
     }
 
     private var details: some View {
@@ -305,9 +423,19 @@ struct NativeMenuContent: View {
                 if let entry = model.movementHistory.entries.first {
                     let original = entry.originalName ?? "Unknown original name"
                     let final = entry.finalName ?? "Unknown final name"
-                    Text("\(original) → \(final)")
-                        .font(.system(size: 10.5))
-                        .lineLimit(1)
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("\(original) → \(final)")
+                            .font(.system(size: 10.5))
+                            .lineLimit(1)
+                        Spacer(minLength: 4)
+                        if entry.undoEligible {
+                            Button("Undo") { model.undo(receiptID: entry.receipt.id) }
+                                .controlSize(.mini)
+                                .disabled(!controls.canUndo)
+                                .accessibilityLabel("Undo last move of \(original)")
+                                .accessibilityHint("Restores this item only if its validated receipt is still eligible.")
+                        }
+                    }
                     Text("\(entry.category ?? "Unknown category") · \(entry.liveStatus.menuText) · \(entry.undoEligible ? "Undo available" : "Undo unavailable")")
                         .font(.system(size: 10))
                         .foregroundStyle(.secondary)
@@ -324,7 +452,6 @@ struct NativeMenuContent: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .accessibilityElement(children: .combine)
     }
 
     private var configuration: some View {
@@ -342,17 +469,23 @@ struct NativeMenuContent: View {
                 .accessibilityLabel(setupRequired ? "Choose DeskTidy folder" : "Change DeskTidy folder")
                 .accessibilityHint("Opens a folder picker. The selected folder is checked by DeskTidy before it is configured.")
 
-                if !conflict {
-                    Button(model.effectiveState.isPaused ? "Resume DeskTidy" : "Pause DeskTidy") {
-                        if model.effectiveState.isPaused {
-                            model.resume()
-                        } else {
-                            model.pause()
-                        }
-                    }
-                    .accessibilityLabel(model.effectiveState.isPaused ? "Resume DeskTidy" : "Pause DeskTidy")
-                    .accessibilityHint("Changes only DeskTidy's own paused state.")
+                if controls.canTidyNow {
+                    Button("Tidy Now") { model.tidyNow() }
+                        .accessibilityLabel("Tidy Now")
+                        .accessibilityHint("Sorts eligible settled items through DeskTidy's canonical guarded mover.")
                 }
+
+                if controls.canPause {
+                    Button("Pause") { model.pause() }
+                        .accessibilityLabel("Pause DeskTidy")
+                        .accessibilityHint("Changes only DeskTidy's own paused state.")
+                } else if controls.canResume {
+                    Button("Resume") { model.resume() }
+                        .accessibilityLabel("Resume DeskTidy")
+                        .accessibilityHint("Clears DeskTidy's own paused state.")
+                }
+
+                if model.isBusy { ProgressView().controlSize(.small) }
             }
             .controlSize(.small)
         }
@@ -406,25 +539,6 @@ struct NativeMenuContent: View {
         case .invalid(let reason, let source, let attemptedPath):
             let attempted = attemptedPath.map { ": \(EffectiveState.shortPath($0))" } ?? ""
             return "\(source) invalid\(attempted) — \(reason)"
-        }
-    }
-    private var headlineStatus: String {
-        if case .notLoaded(let reason) = model.lifecycle {
-            return "Not loaded — \(reason)"
-        }
-        return EffectiveState.statusLine(for: report)
-    }
-
-    private var lifecycleDescription: String {
-        switch model.lifecycle {
-        case .active:
-            return "DeskTidy is active."
-        case .notLoaded(let reason):
-            return "DeskTidy is not loaded: \(reason)"
-        case .fixture(let description):
-            return description
-        case .unavailable(let reason):
-            return "Unavailable: \(reason)"
         }
     }
 

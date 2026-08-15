@@ -137,6 +137,8 @@ final class R1ATests {
                   !line.hasPrefix("Active"), line)
         }
 
+        runNativeMenuControlGates(fixtures)
+
         // R-gates: read-only confinement — computing state and building the
         // diagnostic must not create, modify, or remove anything in the target.
         do {
@@ -163,6 +165,90 @@ final class R1ATests {
 
         print("R1A GATES: \(passCount) passed, \(failCount) failed")
         return failCount == 0
+    }
+
+    private func runNativeMenuControlGates(_ fixtures: [Fixture]) {
+        let healthy = modelState(fixtures.first { $0.expected == .runningHealthy }!)
+        let operational = EffectiveState.nativeMenuControls(
+            for: healthy,
+            setupRequired: false,
+            isPaused: false,
+            hasUndoEligible: true,
+            isBusy: false
+        )
+        check("U10", "configured healthy menu exposes operational controls",
+              !operational.showSetup
+                && operational.canTidyNow
+                && operational.canPause
+                && !operational.canResume
+                && operational.canUndo)
+
+        let onboarding = EffectiveState.nativeMenuControls(
+            for: healthy,
+            setupRequired: true,
+            isPaused: false,
+            hasUndoEligible: true,
+            isBusy: false
+        )
+        check("U11", "onboarding exposes setup only",
+              onboarding.showSetup
+                && !onboarding.canTidyNow
+                && !onboarding.canPause
+                && !onboarding.canResume
+                && !onboarding.canUndo)
+
+        let paused = EffectiveState.nativeMenuControls(
+            for: healthy,
+            setupRequired: false,
+            isPaused: true,
+            hasUndoEligible: true,
+            isBusy: false
+        )
+        check("U12", "paused menu exposes resume but no movement",
+              !paused.canTidyNow
+                && !paused.canPause
+                && paused.canResume
+                && !paused.canUndo)
+
+        let busy = EffectiveState.nativeMenuControls(
+            for: healthy,
+            setupRequired: false,
+            isPaused: false,
+            hasUndoEligible: true,
+            isBusy: true
+        )
+        check("U13", "busy menu disables every mutating control",
+              !busy.canTidyNow && !busy.canPause && !busy.canResume && !busy.canUndo)
+
+        let pausedSymbol = EffectiveState.menuBarSymbol(for: healthy.overall, isPaused: true)
+        let runningSymbol = EffectiveState.menuBarSymbol(for: healthy.overall, isPaused: false)
+        check("U14", "durable pause controls the status symbol and headline",
+              pausedSymbol == "pause.circle.fill"
+                && runningSymbol != pausedSymbol
+                && EffectiveState.statusLine(for: healthy, isPaused: true).hasPrefix("Paused")
+                && !EffectiveState.statusLine(for: healthy, isPaused: false).hasPrefix("Paused"))
+
+        let notLoaded = modelState(fixtures.first { $0.expected == .pausedNotLoaded }!)
+        check("U15", "an unloaded agent is not mislabeled as a durable pause",
+              EffectiveState.menuBarSymbol(for: notLoaded.overall, isPaused: false) != "pause.circle.fill"
+                && EffectiveState.statusLine(for: notLoaded, isPaused: false).hasPrefix("Not running"))
+
+        for state in [OverallState.foreignConflict, .degradedLedger, .ambiguous] {
+            let report = modelState(fixtures.first { $0.expected == state }!)
+            let controls = EffectiveState.nativeMenuControls(
+                for: report,
+                setupRequired: false,
+                isPaused: false,
+                hasUndoEligible: true,
+                isBusy: false
+            )
+            check("U-controls-\(state.rawValue)",
+                  "\(state.rawValue) exposes no mutating menu controls",
+                  !controls.canTidyNow
+                    && !controls.canPause
+                    && !controls.canResume
+                    && !controls.canUndo)
+        }
     }
 
     private func writeNativeConfig(_ app: URL, object: [String: Any]) {

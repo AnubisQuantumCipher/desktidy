@@ -14,9 +14,10 @@ contains an **ad-hoc local release candidate**, not a public release.
 - The RC was verified only against non-Desktop fixture paths. It has not been
   authorized to register a live service, alter a personal mover, or organize a
   real Desktop.
-- Native menu pixels and accessibility-tree data were not available without a
-  prohibited permission interaction. That lane is **INDETERMINATE**, not a
-  visual or VoiceOver pass.
+- The shared native status surface now has fixture-bound pixels, AX controls,
+  and a required launch/capture gate. Keyboard focus traversal and spoken
+  VoiceOver output remain **INDETERMINATE**, so this is not a complete native
+  accessibility pass.
 - Historical sacrificial `SMAppService` observations do not establish
   production migration, Login Items, FDA/TCC, reboot, or login behavior.
 
@@ -62,8 +63,8 @@ The receipt chain is **unkeyed integrity evidence**, not authentication.
 
 This repository does not currently provide a public installer, public release,
 Homebrew update, notarization, Developer ID signing, live service registration,
-Login Items confirmation, FDA/TCC confirmation, reboot/login proof, a native
-menu accessibility pass, or a verified no-network binary audit. Optional
+Login Items confirmation, FDA/TCC confirmation, reboot/login proof, a complete
+keyboard/VoiceOver accessibility pass, or a verified no-network binary audit. Optional
 future update checks are absent from this RC.
 
 ## Repository map

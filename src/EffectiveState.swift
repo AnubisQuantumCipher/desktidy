@@ -61,6 +61,14 @@ struct EffectiveStateReport: Codable {
     var moverVersion: String
 }
 
+struct NativeMenuControls: Equatable {
+    let showSetup: Bool
+    let canTidyNow: Bool
+    let canPause: Bool
+    let canResume: Bool
+    let canUndo: Bool
+}
+
 enum EffectiveState {
 
     /// The single derivation. `now` is injectable for deterministic tests.
@@ -218,20 +226,73 @@ enum EffectiveState {
     static func menuBarSymbol(for overall: OverallState) -> String {
         switch overall {
         case .runningHealthy:  return "tray.full"
-        case .pausedNotLoaded: return "pause.circle"
+        case .pausedNotLoaded: return "tray"
         case .foreignConflict: return "exclamationmark.triangle"
         case .degradedLedger:  return "exclamationmark.triangle"
         case .ambiguous:       return "questionmark.circle"
         }
     }
 
+    static func menuBarSymbol(for overall: OverallState, isPaused: Bool) -> String {
+        isPaused ? "pause.circle.fill" : menuBarSymbol(for: overall)
+    }
+
     static func statusLine(for report: EffectiveStateReport) -> String {
         switch report.overall {
         case .runningHealthy:  return "Active — sole authority for \(shortPath(report.watchedTarget))"
-        case .pausedNotLoaded: return "Paused — agent not loaded"
+        case .pausedNotLoaded: return "Not running — agent not loaded"
         case .foreignConflict: return "Conflict — \(report.foreignMovers.joined(separator: ", ")) owns this folder"
         case .degradedLedger:  return "Attention — receipt ledger failed verification"
         case .ambiguous:       return "Unknown — \(report.ambiguityReason ?? "state unprovable")"
+        }
+    }
+
+    static func statusLine(for report: EffectiveStateReport, isPaused: Bool) -> String {
+        isPaused ? "Paused — file movement is disabled" : statusLine(for: report)
+    }
+
+    static func nativeMenuControls(
+        for report: EffectiveStateReport,
+        setupRequired: Bool,
+        isPaused: Bool,
+        hasUndoEligible: Bool,
+        isBusy: Bool
+    ) -> NativeMenuControls {
+        if setupRequired || isBusy {
+            return NativeMenuControls(
+                showSetup: setupRequired,
+                canTidyNow: false,
+                canPause: false,
+                canResume: false,
+                canUndo: false
+            )
+        }
+
+        switch report.overall {
+        case .runningHealthy:
+            return NativeMenuControls(
+                showSetup: false,
+                canTidyNow: !isPaused,
+                canPause: !isPaused,
+                canResume: isPaused,
+                canUndo: !isPaused && hasUndoEligible
+            )
+        case .pausedNotLoaded:
+            return NativeMenuControls(
+                showSetup: false,
+                canTidyNow: false,
+                canPause: false,
+                canResume: isPaused,
+                canUndo: false
+            )
+        case .foreignConflict, .degradedLedger, .ambiguous:
+            return NativeMenuControls(
+                showSetup: false,
+                canTidyNow: false,
+                canPause: false,
+                canResume: false,
+                canUndo: false
+            )
         }
     }
 
