@@ -56,3 +56,41 @@ Uncommitted Phase-D configuration work is intentionally not a checkpoint:
 - current compile succeeds, but `--phased-test` is red only at `D03`: schema-1 migration returns `protected or symlinked root` for a hermetic `/private/tmp/.../app` store.
 
 Do not claim Phase D complete. Next action: root-cause the false protected/symlink classification in `NativeConfigurationStore.prepareRoot()` / `noSymlink(_:)` using the `D03` fixture, fix it, re-run `--phased-test`, then rebuild and smoke the app before committing the configuration slice. Preserve all non-live constraints and do not push.
+
+## OMP continuation update — Phase E
+
+- `92a8bcd R2 Phase D: harden native configuration` is committed. `--phased-test` reported `4 passed, 0 failed`; the rebuilt native app’s hermetic smoke ended `SMOKE overall=foreignConflict`.
+- Phase E is uncommitted: `src/CanonicalApplicationCore.swift`, `src/PhaseETests.swift`, `src/DeskTidy.swift`, and `app/DeskTidyApp.swift`.
+- Phase E source compile/test attempts did not yield a result: the 600-second and 90-second `swiftc && --phasee-test` invocations timed out after compiler warnings, and launching the existing Phase-E binary through the supervised process runner emitted no output before it was stopped.
+
+Next action: distinguish a compiler/link stall from a test deadlock with a narrow compile-only command, then run individual E01–E06 contracts with an unbuffered harness. Do not commit or claim Phase E until all contracts terminate and pass.
+
+## OMP continuation update — Phase M packaging handoff
+
+- Committed local checkpoints through Phase L:
+  `be1669f` (receipt notifications), `c035070` (collision-safe Undo),
+  `4c62750` (validated history), `ba02f6e` (bounded App Intents),
+  `f4abd19` (lifecycle model), `9012319` (suggestion-only controls), and
+  `e5fdd9e` (finite hostile property campaign).
+- Phase L evidence was rerun after its adjudicator confinement repair:
+  `PHASE L CAMPAIGN: 14 passed, 0 failed, 0 timed out, 14 total`;
+  the independent adjudicator accepted exactly 14 finite records and the
+  summary reported the fixed seed `83971444967444`, unique IDs, nonzero
+  checks, and no unknown status. This is finite regression evidence, not
+  universal proof.
+- Uncommitted Phase M implementation: `scripts/build-app.sh`,
+  `scripts/package-local-rc.sh`, `scripts/verify-local-rc.sh`, and
+  `scripts/plan-local-rc-lifecycle.sh`. It has not been built, packaged,
+  independently reviewed, or executed. No local RC artifact exists.
+- No live Desktop, personal mover, service registration, reboot/login,
+  notification permission dialog, shortcut invocation, push, merge, deploy,
+  or public release occurred in this continuation.
+
+### Restart-safe next action
+
+Read and review the uncommitted Phase M scripts. Create the missing
+`scripts/test-local-rc-packaging.sh` and local-RC documentation if still
+needed. Then build a fresh app to `/private/tmp`, package it to a fresh
+`/private/tmp` location, run package verification and fixture-only smoke,
+and record the resulting artifact hash/manifest. Do not claim Phase M
+complete until those exact commands pass. Preserve all non-live constraints.
