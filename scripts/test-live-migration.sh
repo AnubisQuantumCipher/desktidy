@@ -139,6 +139,43 @@ if config != {"schema": 1, "target": sys.argv[2]}:
 PY
 grep -F 'MIGRATION=PASS' "$FIXTURE/success/out" >/dev/null || fail "success marker"
 
+# A bound prior DeskTidy support directory is preserved and overlaid, never erased.
+make_world "$FIXTURE/upgrade"
+mkdir -p "$FIXTURE/upgrade/home/Library/Application Support/DeskTidy"
+printf 'preserve-me\n' > "$FIXTURE/upgrade/home/Library/Application Support/DeskTidy/legacy.log"
+set +e
+env HOME="$FIXTURE/upgrade/home" DESKTIDY_TEST_MODE=1 DESKTIDY_LAUNCHCTL="$FIXTURE/upgrade/bin/launchctl" \
+  FAKE_LAUNCHCTL_LOG="$FIXTURE/upgrade/launchctl.log" FAKE_LAUNCHCTL_STATE="$FIXTURE/upgrade/state" \
+  "$MIGRATE" --execute --app "$FIXTURE/upgrade/app" --backup "$FIXTURE/upgrade/backup" \
+  --target "$FIXTURE/upgrade/target" --existing-support-backup "$FIXTURE/upgrade/support-backup" \
+  >"$FIXTURE/upgrade/out" 2>&1
+upgrade_rc=$?
+set -e
+if [ "$upgrade_rc" -ne 0 ]; then cat "$FIXTURE/upgrade/out" >&2; fail "bound support upgrade rc=$upgrade_rc"; fi
+grep -Fx 'preserve-me' "$FIXTURE/upgrade/home/Library/Application Support/DeskTidy/legacy.log" >/dev/null || fail "prior support not preserved"
+grep -Fx 'preserve-me' "$FIXTURE/upgrade/support-backup/DeskTidy/legacy.log" >/dev/null || fail "prior support backup absent"
+(cd "$FIXTURE/upgrade/support-backup" && shasum -a 256 -c SHA256SUMS >/dev/null) || fail "prior support backup manifest"
+[ -x "$FIXTURE/upgrade/home/Library/Application Support/DeskTidy/desktidy-sort" ] || fail "upgrade sorter absent"
+grep -F 'MIGRATION=PASS' "$FIXTURE/upgrade/out" >/dev/null || fail "upgrade success marker"
+
+# A failed bound support upgrade restores the prior support directory byte-for-byte.
+make_world "$FIXTURE/upgrade-rollback"
+mkdir -p "$FIXTURE/upgrade-rollback/home/Library/Application Support/DeskTidy"
+printf 'restore-me\n' > "$FIXTURE/upgrade-rollback/home/Library/Application Support/DeskTidy/legacy.log"
+set +e
+env HOME="$FIXTURE/upgrade-rollback/home" DESKTIDY_TEST_MODE=1 DESKTIDY_LAUNCHCTL="$FIXTURE/upgrade-rollback/bin/launchctl" \
+  FAKE_LAUNCHCTL_LOG="$FIXTURE/upgrade-rollback/launchctl.log" FAKE_LAUNCHCTL_STATE="$FIXTURE/upgrade-rollback/state" \
+  FAKE_FAIL_BOOTSTRAP=com.desktidy.notify "$MIGRATE" --execute --app "$FIXTURE/upgrade-rollback/app" \
+  --backup "$FIXTURE/upgrade-rollback/backup" --target "$FIXTURE/upgrade-rollback/target" \
+  --existing-support-backup "$FIXTURE/upgrade-rollback/support-backup" >"$FIXTURE/upgrade-rollback/out" 2>&1
+upgrade_rollback_rc=$?
+set -e
+[ "$upgrade_rollback_rc" -eq 1 ] || fail "bound support rollback rc=$upgrade_rollback_rc"
+grep -Fx 'restore-me' "$FIXTURE/upgrade-rollback/home/Library/Application Support/DeskTidy/legacy.log" >/dev/null || fail "bound support rollback did not restore prior bytes"
+[ ! -e "$FIXTURE/upgrade-rollback/home/Library/Application Support/DeskTidy/desktidy-sort" ] || fail "bound support rollback retained new sorter"
+[ ! -e "$FIXTURE/upgrade-rollback/home/Library/Application Support/DeskTidy/config.json" ] || fail "bound support rollback retained new config"
+grep -F 'MIGRATION=ROLLED_BACK' "$FIXTURE/upgrade-rollback/out" >/dev/null || fail "bound support rollback marker"
+
 # Failure after sorter bootstrap must remove it and restore both old labels.
 make_world "$FIXTURE/rollback"
 set +e
@@ -179,4 +216,4 @@ set -e
 grep -F 'MIGRATION=ROLLED_BACK' "$FIXTURE/partial/out" >/dev/null || fail "partial rollback marker"
 if grep -Fx 'bootstrap com.sicarii.desktop-autosort' "$FIXTURE/partial/launchctl.log" >/dev/null; then fail "already-loaded sorter was bootstrapped"; fi
 
-printf 'LIVE_MIGRATION_TEST=PASS cases=7\n'
+printf 'LIVE_MIGRATION_TEST=PASS cases=9\n'

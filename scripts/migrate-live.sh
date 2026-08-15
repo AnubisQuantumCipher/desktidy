@@ -7,16 +7,18 @@ shift || true
 APP=""
 BACKUP=""
 TARGET=""
+EXISTING_SUPPORT_BACKUP=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --app) APP="${2:-}"; shift 2 ;;
     --backup) BACKUP="${2:-}"; shift 2 ;;
     --target) TARGET="${2:-}"; shift 2 ;;
+    --existing-support-backup) EXISTING_SUPPORT_BACKUP="${2:-}"; shift 2 ;;
     *) echo "migration: unknown option: $1" >&2; exit 2 ;;
   esac
 done
 [ -n "$APP" ] && [ -n "$BACKUP" ] && [ -n "$TARGET" ] || {
-  echo "usage: migrate-live.sh [--plan|--execute] --app APP --backup DIR --target DIR" >&2
+  echo "usage: migrate-live.sh [--plan|--execute] --app APP --backup DIR --target DIR [--existing-support-backup NEW_DIR]" >&2
   exit 2
 }
 
@@ -27,6 +29,7 @@ PLAN ONLY — no files or services are changed.
 Candidate app: $APP
 Rollback backup: $BACKUP
 Target: $TARGET
+Existing support backup: ${EXISTING_SUPPORT_BACKUP:-not requested}
 Transaction order: verify and stage → old notifier → old sorter → new sorter → new notifier → postconditions.
 The old files remain available for rollback; no uninstall-first operation occurs.
 EOF
@@ -119,10 +122,33 @@ for file in "$OLD_SORT_PLIST" "$OLD_NOTIFY_PLIST" \
 # Bind the currently installed legacy plists to the rollback epoch byte-for-byte.
 cmp -s "$OLD_SORT_PLIST" "$BACKUP/LaunchAgents/com.sicarii.desktop-autosort.plist" || { echo "migration: live sorter plist differs from backup" >&2; exit 2; }
 cmp -s "$OLD_NOTIFY_PLIST" "$BACKUP/LaunchAgents/com.sicarii.desktop-autosort-notify.plist" || { echo "migration: live notifier plist differs from backup" >&2; exit 2; }
-[ ! -e "$NEW_SORT_PLIST" ] && [ ! -e "$NEW_NOTIFY_PLIST" ] && [ ! -e "$NEW_SUPPORT" ] || {
+[ ! -e "$NEW_SORT_PLIST" ] && [ ! -e "$NEW_NOTIFY_PLIST" ] || {
   echo "migration: prior DeskTidy service installation requires a separately bound upgrade transaction" >&2
   exit 2
 }
+prior_support=0
+if [ -e "$NEW_SUPPORT" ]; then
+  [ -d "$NEW_SUPPORT" ] && [ ! -L "$NEW_SUPPORT" ] || {
+    echo "migration: existing DeskTidy support is not a regular directory" >&2
+    exit 2
+  }
+  [ -n "$EXISTING_SUPPORT_BACKUP" ] || {
+    echo "migration: prior DeskTidy service installation requires a separately bound upgrade transaction" >&2
+    exit 2
+  }
+  case "$EXISTING_SUPPORT_BACKUP" in /*) ;; *) echo "migration: existing support backup must be an absolute path" >&2; exit 2;; esac
+  [ ! -e "$EXISTING_SUPPORT_BACKUP" ] || { echo "migration: existing support backup path already exists" >&2; exit 2; }
+  canonical_existing_directory "$(dirname "$EXISTING_SUPPORT_BACKUP")" >/dev/null \
+    || { echo "migration: existing support backup parent is invalid" >&2; exit 2; }
+  if find "$NEW_SUPPORT" -type l -print -quit | grep -q .; then
+    echo "migration: symlinks are forbidden in existing DeskTidy support" >&2
+    exit 2
+  fi
+  prior_support=1
+elif [ -n "$EXISTING_SUPPORT_BACKUP" ]; then
+  echo "migration: existing support backup was requested but no prior support exists" >&2
+  exit 2
+fi
 OLD_TARGET="$(/usr/libexec/PlistBuddy -c 'Print :WatchPaths:0' "$OLD_SORT_PLIST")"
 [ "$(canonical_existing_directory "$OLD_TARGET")" = "$TARGET" ] || { echo "migration: legacy target differs from requested target" >&2; exit 2; }
 
@@ -169,6 +195,16 @@ PY
 }
 [ "$AUTHORITY_SCAN" = CLEAR ] || { echo "migration: authority inventory did not close" >&2; exit 2; }
 
+if [ "$prior_support" -eq 1 ]; then
+  mkdir "$EXISTING_SUPPORT_BACKUP"
+  /usr/bin/ditto "$NEW_SUPPORT" "$EXISTING_SUPPORT_BACKUP/DeskTidy"
+  (
+    cd "$EXISTING_SUPPORT_BACKUP"
+    find DeskTidy -type f -print0 | LC_ALL=C sort -z | xargs -0 /usr/bin/shasum -a 256 > SHA256SUMS
+    /usr/bin/shasum -a 256 -c SHA256SUMS >/dev/null
+  )
+fi
+
 mkdir "$LOCK" 2>/dev/null || { echo "migration: another migration transaction is active" >&2; exit 2; }
 STAGE="$(mktemp -d "$USER_HOME/Library/Application Support/.desktidy-stage.XXXXXX")"
 rollback_armed=0
@@ -180,6 +216,14 @@ rollback() {
   "$LAUNCHCTL" bootout "gui/$UID_NUM" "$NEW_SORT_PLIST" >/dev/null 2>&1
   rm -f "$NEW_NOTIFY_PLIST" "$NEW_SORT_PLIST"
   rm -rf "$NEW_SUPPORT"
+  local support_rc=0
+  if [ "$prior_support" -eq 1 ]; then
+    (
+      cd "$EXISTING_SUPPORT_BACKUP"
+      /usr/bin/shasum -a 256 -c SHA256SUMS >/dev/null
+    ) && /usr/bin/ditto "$EXISTING_SUPPORT_BACKUP/DeskTidy" "$NEW_SUPPORT"
+    support_rc=$?
+  fi
   /usr/bin/ditto "$BACKUP/DesktopAutoSort" "$OLD_SUPPORT"
   /usr/bin/ditto "$BACKUP/LaunchAgents/com.sicarii.desktop-autosort.plist" "$OLD_SORT_PLIST"
   /usr/bin/ditto "$BACKUP/LaunchAgents/com.sicarii.desktop-autosort-notify.plist" "$OLD_NOTIFY_PLIST"
@@ -197,7 +241,7 @@ rollback() {
   "$LAUNCHCTL" print "gui/$UID_NUM/com.sicarii.desktop-autosort-notify" >/dev/null 2>&1
   local notify_print=$?
   cleanup
-  if [ "$sort_rc" -eq 0 ] && [ "$notify_rc" -eq 0 ] && [ "$sort_print" -eq 0 ] && [ "$notify_print" -eq 0 ]; then
+  if [ "$support_rc" -eq 0 ] && [ "$sort_rc" -eq 0 ] && [ "$notify_rc" -eq 0 ] && [ "$sort_print" -eq 0 ] && [ "$notify_print" -eq 0 ]; then
     echo "MIGRATION=ROLLED_BACK original_exit=$original_rc"
     exit 1
   fi
@@ -213,7 +257,11 @@ on_exit() {
 }
 trap on_exit EXIT
 
-mkdir -p "$STAGE/support"
+if [ "$prior_support" -eq 1 ]; then
+  /usr/bin/ditto "$NEW_SUPPORT" "$STAGE/support"
+else
+  mkdir -p "$STAGE/support"
+fi
 /usr/bin/ditto "$BUNDLE/desktidy-sort" "$STAGE/support/desktidy-sort"
 /usr/bin/ditto "$BUNDLE/desktidy-notify.sh" "$STAGE/support/desktidy-notify.sh"
 chmod 755 "$STAGE/support/desktidy-sort" "$STAGE/support/desktidy-notify.sh"
