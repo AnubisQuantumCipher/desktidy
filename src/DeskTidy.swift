@@ -63,8 +63,13 @@ final class DeskTidy {
                                         moverVersion: DeskTidyVersion.string,
                                         log: { [weak self] in self?.log($0) })
 
-    // The target's own type-folders are skipped when scanning the root.
-    var reservedRootNames: Set<String> { Set(Category.allCases.map { $0.folderName }) }
+    // The target's own type-folders and the established personal-sorter roots
+    // are control surfaces, not user directories to file under Folders/.
+    // Keeping the legacy names here makes the authority handoff non-destructive.
+    var reservedRootNames: Set<String> {
+        Set(Category.allCases.map { $0.folderName })
+            .union(["Archive", "Docs", "Media", "Projects"])
+    }
 
     init() {
         home = fm.homeDirectoryForCurrentUser

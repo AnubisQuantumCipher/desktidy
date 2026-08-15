@@ -549,5 +549,28 @@ final class R0Tests {
             check("C30", "notification/log failure leaves ledger truth intact",
                   receipt?.outcome == "moved" && inLedger && sawLogFailure)
         }
+
+        // C31: migration compatibility — established personal-sorter category
+        // roots are control surfaces, not user folders to re-file.
+        do {
+            let root = tempDir("legacy-category-roots")
+            let app = tempDir("legacy-category-app")
+            let agents = tempDir("legacy-category-agents")
+            let names = ["Archive", "Docs", "Media", "Projects"]
+            for name in names {
+                let directory = root.appendingPathComponent(name, isDirectory: true)
+                try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+                try? fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)], ofItemAtPath: directory.path)
+            }
+            setenv("DESKTIDY_TARGET_DIR", root.path, 1)
+            setenv("DESKTIDY_APP_DIR", app.path, 1)
+            setenv("DESKTIDY_AGENTS_DIR", agents.path, 1)
+            _ = await DeskTidy().run(arguments: [])
+            unsetenv("DESKTIDY_TARGET_DIR"); unsetenv("DESKTIDY_APP_DIR"); unsetenv("DESKTIDY_AGENTS_DIR")
+            let preserved = names.allSatisfy { fm.fileExists(atPath: root.appendingPathComponent($0).path) }
+            let moved = ReceiptLedger(appDirectory: app).readAll().receipts.filter { $0.outcome == "moved" }
+            check("C31", "legacy category roots remain at the watched root",
+                  preserved && moved.isEmpty, "preserved=\(preserved) moved=\(moved.count)")
+        }
     }
 }
