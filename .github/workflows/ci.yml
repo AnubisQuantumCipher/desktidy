@@ -160,6 +160,6 @@ jobs:
           DESKTIDY_TARGET_DIR="$SB" DESKTIDY_APP_DIR="$APP" ./build/desktidy-sort
           echo two > "$SB/dup.txt"; touch -t "$OLD" "$SB/dup.txt"
           DESKTIDY_TARGET_DIR="$SB" DESKTIDY_APP_DIR="$APP" ./build/desktidy-sort
-          count=$(find "$SB/Documents" -name 'dup*' | wc -l | tr -d ' ')
+          count=$(find "$SB/Docs/Notes-and-Misc" -name 'dup*' | wc -l | tr -d ' ')
           test "$count" -eq 2
           echo "both copies preserved ($count)"
