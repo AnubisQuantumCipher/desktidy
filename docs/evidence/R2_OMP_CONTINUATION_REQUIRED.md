@@ -65,7 +65,7 @@ Do not claim Phase D complete. Next action: root-cause the false protected/symli
 
 Next action: distinguish a compiler/link stall from a test deadlock with a narrow compile-only command, then run individual E01–E06 contracts with an unbuffered harness. Do not commit or claim Phase E until all contracts terminate and pass.
 
-## OMP continuation update — Phase M packaging handoff
+## OMP continuation update — Phase L through M
 
 - Committed local checkpoints through Phase L:
   `be1669f` (receipt notifications), `c035070` (collision-safe Undo),
@@ -78,19 +78,27 @@ Next action: distinguish a compiler/link stall from a test deadlock with a narro
   summary reported the fixed seed `83971444967444`, unique IDs, nonzero
   checks, and no unknown status. This is finite regression evidence, not
   universal proof.
-- Uncommitted Phase M implementation: `scripts/build-app.sh`,
-  `scripts/package-local-rc.sh`, `scripts/verify-local-rc.sh`, and
-  `scripts/plan-local-rc-lifecycle.sh`. It has not been built, packaged,
-  independently reviewed, or executed. No local RC artifact exists.
-- No live Desktop, personal mover, service registration, reboot/login,
-  notification permission dialog, shortcut invocation, push, merge, deploy,
-  or public release occurred in this continuation.
+- `34df60d R2 Phase M: add local RC packaging controls` and
+  `601e817 R2 Phase M: reject archive symlinks before extraction` are local
+  checkpoints.
+- The current local-only ad-hoc RC was built from source commit
+  `601e8177db125ad6d36bb65a4a54eb46e81a6a91`, packaged and independently
+  verified from fresh `/private/tmp` locations. The package archive SHA-256 is
+  `57aee31ff27bea06a83eb6b2a04acd6a6d5a4474855d38998fdfe5c528c7a549`;
+  its sidecar manifest SHA-256 is
+  `e4e7e8fa81a94239e22fb388d5cb2c96e7c73001443930c1c012eed071371bbc`.
+- Verification confirmed the manifest, embedded build identity, arm64/macOS
+  14.0 metadata, ad-hoc signature, and a fresh fixture smoke result
+  `SMOKE overall=pausedNotLoaded`. Gatekeeper assessment was `rejected`;
+  this is expected local/ad-hoc evidence and is not a public-trust result.
+- `scripts/test-local-rc-packaging.sh` passed and proves the verifier rejects
+  a crafted ZIP symlink before extraction. The actual package/verification
+  touched no Desktop, service, login item, personal mover, or user files.
 
 ### Restart-safe next action
 
-Read and review the uncommitted Phase M scripts. Create the missing
-`scripts/test-local-rc-packaging.sh` and local-RC documentation if still
-needed. Then build a fresh app to `/private/tmp`, package it to a fresh
-`/private/tmp` location, run package verification and fixture-only smoke,
-and record the resulting artifact hash/manifest. Do not claim Phase M
-complete until those exact commands pass. Preserve all non-live constraints.
+Phase N must inspect the exact Phase M artifact in the actual macOS surface
+and record screenshots/accessibility trees for the supported fixture states.
+Do not click permission dialogs or touch the live Desktop. Then reconcile
+documentation claims, construct the canonical gate, and run the hosted
+clean-clone reseal.
