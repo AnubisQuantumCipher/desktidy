@@ -13,6 +13,35 @@ OUT="${1:-$REPO/build}"
 APP="$OUT/DeskTidy.app"
 MACOS_MIN="14.0"
 
+refuse_desktop_target() {
+  local target desktop
+  target="$(/usr/bin/python3 - "$1" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).expanduser().resolve(strict=False))
+PY
+)"
+  desktop="$(/usr/bin/python3 - "$HOME/Desktop" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).expanduser().resolve(strict=False))
+PY
+)"
+  case "$target" in
+    "$desktop"|"$desktop"/*)
+      echo "build: refusing Desktop target; use a non-Desktop build directory" >&2
+      exit 2
+      ;;
+  esac
+}
+
+refuse_desktop_target "$OUT"
+if ! git -C "$REPO" diff --quiet || ! git -C "$REPO" diff --cached --quiet; then
+  echo "build: refusing a dirty source tree; commit the exact local RC source first" >&2
+  exit 2
+fi
+SOURCE_COMMIT="$(git -C "$REPO" rev-parse --verify HEAD^{commit})"
+
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 
 xcrun swiftc -O -parse-as-library \
@@ -55,6 +84,11 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </dict>
 </plist>
 PLIST
+cat > "$APP/Contents/Resources/DeskTidyBuild.json" <<BUILDINFO
+{"sourceCommit":"$SOURCE_COMMIT","minimumMacOS":"$MACOS_MIN","architecture":"arm64","signing":"ad-hoc-local-only"}
+BUILDINFO
+
 
 codesign -s - -i com.desktidy.app --force "$APP"
-echo "built: $APP"
+echo "built local-only ad-hoc app: $APP"
+echo "signing: ad-hoc (-); not Developer ID signed, not notarized, and not for distribution"
