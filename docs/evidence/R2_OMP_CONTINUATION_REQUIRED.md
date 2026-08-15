@@ -102,3 +102,28 @@ and record screenshots/accessibility trees for the supported fixture states.
 Do not click permission dialogs or touch the live Desktop. Then reconcile
 documentation claims, construct the canonical gate, and run the hosted
 clean-clone reseal.
+
+## OMP continuation update — Phases N and O
+
+- `4a2b5e0 R2 Phase N: record visual evidence limitation` records the exact
+  local RC fixture launch. The app process was observed, but the captured host
+  image showed the foreground terminal rather than a DeskTidy menu extra. No
+  accessibility tree was requested because that would enter a prohibited
+  permission path. Phase N is **INDETERMINATE**, not a visual/VoiceOver pass.
+- `a45ef9e R2 Phase O: reconcile local RC claims` replaces stale public
+  installer, Homebrew, reboot/login, signing, service, and website claims with
+  the bounded local-RC state. It adds `scripts/claims-scan.py` and
+  `scripts/test-claims-scan.sh`; the contract test passed with 22 scanned
+  files, 5 rules, 0 active matches, 0 excluded matches, and successful
+  mutation/zero-work/malformed-summary controls.
+- The website source was updated but not deployed. Its Next.js build was
+  attempted and skipped after `next: command not found`; this worktree has no
+  `website/node_modules/.bin/next`. No dependency installation or deployment
+  was attempted.
+
+### Restart-safe next action
+
+Phase P must construct the canonical full-local-release gate and independent
+validator. It must preserve Phase N as indeterminate rather than convert it
+into release success, and must carry the website build dependency absence as a
+skipped verification rather than a pass.
