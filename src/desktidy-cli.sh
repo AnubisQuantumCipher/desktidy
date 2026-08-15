@@ -1,12 +1,9 @@
 #!/bin/bash
-# desktidy — management CLI. Installed on PATH (e.g. by Homebrew) so users can
-# set up, check, and remove the background service without cloning the repo.
-#
-#   desktidy setup [--target DIR]   install + start the background agents
-#   desktidy status                 what's running, what's granted, recent moves
-#   desktidy sort-now               run one sorting pass right now (foreground)
-#   desktidy log                    tail the move log
-#   desktidy teardown               stop + remove the agents (files untouched)
+# Legacy development management CLI. It is not included in the current local
+# RC archive and no public Homebrew installer is released for this tree.
+# Commands below can mutate a real user's launchd state; they are not part of
+# the fixture-only release workflow. Do not invoke them against a live Desktop
+# without separate authorization.
 set -euo pipefail
 
 # Resolve sibling components regardless of install layout:
@@ -161,13 +158,16 @@ case "${1:-help}" in
   log)      shift; cmd_log ;;
   *)
     cat <<'EOF'
-desktidy — your Desktop, organized automatically
+desktidy — legacy development management CLI
 
-  desktidy setup [--target DIR]   install + start the background service
+Not packaged in the fixture-only local RC. These commands can modify launchd
+state and are not a public installer or support promise.
+
+  desktidy setup [--target DIR]   install + start background agents
   desktidy status                 service, permissions, recent moves
-  desktidy sort-now               run one pass right now
+  desktidy sort-now               run one pass now
   desktidy log                    follow the move log
-  desktidy teardown               remove the service (never touches your files)
+  desktidy teardown               remove the agents (files remain untouched)
 EOF
     ;;
 esac

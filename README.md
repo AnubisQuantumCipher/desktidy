@@ -1,211 +1,86 @@
 # DeskTidy
 
-[![CI](https://github.com/AnubisQuantumCipher/desktidy/actions/workflows/ci.yml/badge.svg)](https://github.com/AnubisQuantumCipher/desktidy/actions/workflows/ci.yml)
+DeskTidy is a local-native macOS file-organization project. Its current tree
+contains an **ad-hoc local release candidate**, not a public release.
 
-**Website: [desktidy.vercel.app](https://desktidy.vercel.app)**
+## Current status — 2026-08-15
 
-**Your macOS Desktop, organized automatically.** Drop anything on your Desktop and DeskTidy files it into the right folder about twenty seconds later — and shows you a clickable notification telling you where it went. No dragging, no thinking, no maintenance.
+- A local arm64 macOS 14+ RC was built, packaged, and verified on an isolated
+  fixture. The package is ad-hoc signed; Gatekeeper assessed it as rejected.
+  It is **not** Developer ID signed, notarized, publicly distributed, or a
+  Homebrew release.
+- The current public Homebrew formula, if any, predates this work. Do not use
+  it as evidence for this RC and do not treat it as an installer for this tree.
+- The RC was verified only against non-Desktop fixture paths. It has not been
+  authorized to register a live service, alter a personal mover, or organize a
+  real Desktop.
+- Native menu pixels and accessibility-tree data were not available without a
+  prohibited permission interaction. That lane is **INDETERMINATE**, not a
+  visual or VoiceOver pass.
+- Historical sacrificial `SMAppService` observations do not establish
+  production migration, Login Items, FDA/TCC, reboot, or login behavior.
 
-Built for people whose Desktop turns into a landfill of screenshots, downloads, and half-named files by Friday.
+Evidence: [`docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md`](docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md),
+[`docs/evidence/R2_OMP_PHASEA_INDEPENDENT_AUDIT.md`](docs/evidence/R2_OMP_PHASEA_INDEPENDENT_AUDIT.md), and
+[`docs/evidence/R2_OMP_CONTINUATION_REQUIRED.md`](docs/evidence/R2_OMP_CONTINUATION_REQUIRED.md).
 
-![DeskTidy demo — a messy Desktop organizing itself, with a notification per move](docs/demo.gif)
+## Build and verify a local RC
 
-```
-Before                          After
-────────────                    ────────────
-Screenshot 3.09.11 PM.png       📁 Screenshots
-invoice_final_v2.pdf            📁 Documents
-demo (13s).mp4                  📁 Videos
-project-backup.zip              📁 Archives
-main.rs                         📁 Code
-untitled-2.xyz                  📁 Inbox   ← anything it's unsure about
-```
-
----
-
-## What it does
-
-- **Watches your Desktop** and files each loose item into a type folder — `Documents`, `Images`, `Screenshots`, `Videos`, `Audio`, `Archives`, `Code`, `Folders`, and `Inbox` for anything it can't confidently place.
-- **Tells you in real time.** Every move fires a macOS notification — *"📥 Filed to Documents — invoice.pdf"* — and **clicking it opens Finder with that file highlighted.**
-- **Runs itself forever.** Installed as a `launchd` agent, so it starts automatically at every login and needs zero babysitting.
-- **Optionally uses on-device AI** (macOS 26+, Apple Intelligence) to *suggest* homes for whatever lands in `Inbox` — privately, on your Mac, and only as suggestions.
-
-## Why it's safe
-
-- **It never deletes anything.** DeskTidy only *moves* files. If a name already exists in the destination, it keeps both (adds a timestamp) — it never overwrites.
-- **It waits before touching a file** (15s by default), so it never grabs something mid-download or mid-save.
-- **The AI never moves anything.** The optional smart pass writes suggestions to a file. You decide.
-- **Nothing leaves your Mac.** No servers, no telemetry, no network. The AI is Apple's on-device model.
-- **Every move leaves a receipt.** A hash-chained, crash-recoverable ledger records each move's exact final path (`desktidy-sort --history`), so you can always see — and manually reverse — exactly what happened. A one-click Undo command is planned, not shipped.
-
----
-
-## Requirements
-
-- macOS 14 (Sonoma) or later — what CI tests. Earlier versions may work but are unverified.
-- Apple's command-line developer tools (the installer tells you how if they're missing: `xcode-select --install`).
-- *Optional:* [`terminal-notifier`](https://github.com/julienXX/terminal-notifier) (`brew install terminal-notifier`) for **clickable** banners. Without it you still get banners, just not clickable.
-- *Optional:* macOS 26+ for the on-device AI triage. On older macOS it's simply skipped.
-
-## Install
-
-### Homebrew (recommended)
+Requirements: macOS 14+, Apple Silicon, Xcode command-line tools, and a clean
+source tree. The commands below use temporary paths and do not install,
+register, launch against the Desktop, or request permissions.
 
 ```bash
-brew install anubisquantumcipher/tap/desktidy
-desktidy setup
+scripts/build-app.sh /private/tmp/desktidy-build/DeskTidy.app
+scripts/package-local-rc.sh /private/tmp/desktidy-build/DeskTidy.app /private/tmp/desktidy-dist
+scripts/verify-local-rc.sh \
+  /private/tmp/desktidy-dist/DeskTidy-local-rc-arm64-macos14.zip \
+  /private/tmp/desktidy-dist/DeskTidy-local-rc-manifest.json
 ```
 
-`setup` starts the background service and walks you through the one-time **Full Disk Access** grant (a background helper can't touch your Desktop until you allow it once). That's it.
+`verify-local-rc.sh` checks the archive manifest, rejects unsafe archive paths
+and symlinks before extraction, performs a fixture smoke, and records the
+ad-hoc-signing/Gatekeeper boundary. It is local evidence only.
 
-Useful commands:
+## Product safety model
 
-```bash
-desktidy status      # service, permissions, recent moves
-desktidy sort-now    # run one pass right now
-desktidy log         # follow the move log
-desktidy teardown    # stop + remove the service (files untouched)
-```
+The local RC's guarded movement core is tested on disposable fixture roots:
 
-Want it to organize a different folder instead of the Desktop?
+- one canonical movement authority; foreign, ambiguous, or invalid authority
+  state refuses movement;
+- deterministic routes and collision-safe names; no overwrite path;
+- append-only receipt records with SHA-256 chaining, crash reconciliation, and
+  bounded history/Undo queries;
+- receipt-derived notifications, collision-safe Undo, and bounded App Intents
+  are local-RC source capabilities with hermetic contracts, not a claim of
+  live macOS service integration;
+- suggestion outputs are non-mutating. They never authorize an automatic move.
 
-```bash
-desktidy setup --target ~/Downloads
-```
+The receipt chain is **unkeyed integrity evidence**, not authentication.
 
-### From source
+## Explicit non-claims
 
-```bash
-git clone https://github.com/AnubisQuantumCipher/desktidy.git
-cd desktidy
-./install.sh          # same flags: --target ~/Downloads
-```
+This repository does not currently provide a public installer, public release,
+Homebrew update, notarization, Developer ID signing, live service registration,
+Login Items confirmation, FDA/TCC confirmation, reboot/login proof, a native
+menu accessibility pass, or a verified no-network binary audit. Optional
+future update checks are absent from this RC.
 
-## Uninstall
+## Repository map
 
-```bash
-desktidy teardown && brew uninstall desktidy   # Homebrew install
-./uninstall.sh                                  # source install
-```
+- [`docs/RELEASE_PLAN.md`](docs/RELEASE_PLAN.md) — requirements and release
+  gates; not a completed-release declaration.
+- [`docs/R0_AUTHORITY_AND_RECEIPTS.md`](docs/R0_AUTHORITY_AND_RECEIPTS.md) —
+  movement authority and receipts design.
+- [`docs/ML_AUTHORITY_POLICY.md`](docs/ML_AUTHORITY_POLICY.md) — strict
+  suggestion/action boundary.
+- [`docs/evidence/`](docs/evidence/) — bounded observations and their limits.
+- [`website/`](website/) — website source only. This phase does not deploy it.
+- [`scripts/claims-scan.py`](scripts/claims-scan.py) — inventories configured
+  active and excluded documentation surfaces; its contract and mutation control
+  are in `scripts/test-claims-scan.sh`.
 
-Removes the tool completely. **Your folders and every file it ever sorted stay exactly where they are** — it only removes DeskTidy itself.
+## Security reports
 
----
-
-## How it works
-
-```
- file lands on Desktop
-        │
-        ▼
- launchd WatchPaths fires ──► desktidy-sort ──► waits 15s (settle) ──► moves to the right folder ──► logs the move
-                                                                                                        │
- desktidy-notify tails the log ─────────────────────────────────────────────────────────────────────►─┘
-        │
-        ▼
- clickable macOS notification: "📥 Filed to Documents — invoice.pdf"
-```
-
-- **`desktidy-sort`** — a small, signed Swift binary. Pure, deterministic rules (extension + a couple of name heuristics). A single-instance lock keeps the watcher and any manual run from colliding.
-- **`desktidy-notify.sh`** — a tiny shell watcher that turns each logged move into a notification.
-- **One movement authority, receipts for everything (v1.2.0):** DeskTidy
-  refuses to sort a folder that another automation already watches (no
-  double-sorting, fails closed on ambiguity), and every move is recorded in a
-  durable, hash-chained receipt ledger with crash recovery — see
-  [docs/R0_AUTHORITY_AND_RECEIPTS.md](docs/R0_AUTHORITY_AND_RECEIPTS.md).
-  `desktidy-sort --history` shows recent receipts; `--verify-ledger` checks
-  the chain.
-- **Two `launchd` agents** in `~/Library/LaunchAgents/` (`com.desktidy.sort`, `com.desktidy.notify`) — this is what makes it survive reboots. They start at login, watch the folder, and relaunch themselves if needed.
-
-## The folder scheme
-
-| Folder | Gets |
-|---|---|
-| **Screenshots** | files named `Screenshot …` / `Screen Shot …` |
-| **Images** | png, jpg, heic, gif, webp, svg, … |
-| **Videos** | mp4, mov, mkv, `Screen Recording …`, … |
-| **Audio** | mp3, wav, m4a, flac, … |
-| **Documents** | pdf, docx, txt, md, pages, xlsx, csv, epub, … |
-| **Code** | js, ts, py, rs, go, swift, json, yaml, sh, … |
-| **Archives** | zip, tar, gz, dmg, pkg, … |
-| **Folders** | any folder you drop on the Desktop |
-| **Inbox** | anything it can't confidently place (never a wrong guess) |
-
-## Configuration
-
-Everything you'd want to change lives in [`src/Config.swift`](src/Config.swift): folder names, which extensions go where, the settle delay, and the AI toggle. Edit it, then re-run `./install.sh` to rebuild and reload.
-
-```swift
-static let folderDocuments = "Documents"      // rename freely
-static let settleSeconds: TimeInterval = 15   // how long to wait before moving
-static let codeExts: Set<String> = ["js","ts","py","rs", …]   // move extensions between sets
-```
-
-## Optional: on-device AI triage (macOS 26+)
-
-If you're on macOS 26 with Apple Intelligence, DeskTidy uses Apple's **on-device** foundation model to read the name and a short local preview of files sitting in `Inbox`, then writes `Inbox/SMART_TRIAGE_SUGGESTIONS.md` recommending where each belongs.
-
-It is **suggestions only** — the model never moves, renames, uploads, or deletes anything, and file contents are treated as untrusted (it won't follow instructions hidden inside a file). On older macOS this feature is compiled out entirely; the deterministic sorter is unaffected.
-
----
-
-## FAQ
-
-**Does it survive a reboot?** Yes. The agents auto-start at every login (they can't run at the lock screen — they need your session — but they're live within seconds of you logging in).
-
-**Why does it need Full Disk Access?** macOS protects the Desktop folder. A background helper can't read or move files there until you allow it once in System Settings. DeskTidy asks for nothing else, and makes no network connections.
-
-**Will it move files I'm actively working on?** No — it waits until a file has been untouched for 15 seconds (configurable), and it skips in-progress downloads (`.crdownload`, `.part`, `.tmp`, …).
-
-**Can I organize my Downloads / another folder instead?** Yes: `./install.sh --target ~/Downloads`.
-
-**What if two files have the same name?** Both are kept. The second gets a `(dup …)` timestamp suffix. Nothing is ever overwritten.
-
-## For AI coding agents (and the humans who run them)
-
-If you run agents like Claude Code, Codex, or Cursor on this Mac, they'll
-sometimes write files to the Desktop — and ~20 seconds later DeskTidy files
-them, which can confuse an agent that goes back to look ("where did report.md
-go?"). Fix: make your agents DeskTidy-aware.
-
-- **Claude Code:** install the ready-made skill from [`skills/desktidy-awareness/`](skills/desktidy-awareness/SKILL.md):
-
-  ```bash
-  mkdir -p ~/.claude/skills/desktidy-awareness
-  curl -fsSL https://raw.githubusercontent.com/AnubisQuantumCipher/desktidy/main/skills/desktidy-awareness/SKILL.md \
-    -o ~/.claude/skills/desktidy-awareness/SKILL.md
-  ```
-
-- **Codex / Cursor / anything that reads AGENTS.md:** paste the block from
-  [`skills/AGENTS-SNIPPET.md`](skills/AGENTS-SNIPPET.md) into your global agents file.
-
-The short version agents need to know: files at the watched root get filed
-after ~20s; the move log (`~/Library/Application Support/DeskTidy/desktidy.log`)
-records every final path; subfolders (including `Inbox/`) are never re-sorted;
-`desktidy teardown` / `desktidy setup` pauses and resumes for Desktop-heavy work.
-
-## Roadmap
-
-- Menu-bar app: an **experimental read-only status surface exists** on the
-  R1A/R1B source branches (build it with `scripts/build-app.sh`). It is not
-  packaged, not in the Homebrew formula, and not a public release. Pause/resume,
-  activity feed, and notifications are still to come.
-- Per-folder rules and user-defined categories via a JSON config (no rebuild).
-- Suggestion previews you can approve in one click — per the [ML authority policy](docs/ML_AUTHORITY_POLICY.md), model output never moves files on its own; approval stays human.
-- Homebrew tap (`anubisquantumcipher/tap/desktidy`) already exists; the
-  published formula remains **v1.1.2** and does **not** install R0 receipts,
-  R1A, or R1B. This source tree is experimental and unmerged.
-
-## Contributing
-
-Issues and PRs welcome. The sorter, receipts, and tests are a small Swift
-tree plus a few shell scripts — read `src/` rather than trusting a line
-count. Run `desktidy-sort --self-test` after changes.
-
-## License
-
-MIT — see [LICENSE](LICENSE).
-
----
-
-*DeskTidy runs entirely on your Mac. It has no servers, no analytics, and no network access of any kind.*
+See [`SECURITY.md`](SECURITY.md). It describes the repository boundary and
+reporting route; it does not assert a supported public release.

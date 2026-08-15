@@ -1,5 +1,21 @@
 # Changelog
 
+## Unreleased — R2 local native RC (not a public release)
+
+- Local checkpoints add the fixture-gated native configuration model, pause and
+  status controls, receipt-derived notifications, collision-safe Undo, bounded
+  history/WhereDidItGo queries, bounded App Intents, lifecycle modeling, and a
+  finite hostile campaign. These are source and hermetic-fixture contracts.
+- An arm64 macOS 14+ app was packaged locally with ad-hoc signing and a
+  manifest. Gatekeeper rejection is expected for this local evidence. There is
+  no Developer ID signature, notarization, public release, Homebrew update, or
+  authorization to install/register against a real Desktop.
+- Visual and accessibility verification is **INDETERMINATE**: no direct menu
+  pixels or accessibility tree were captured without forbidden permission
+  interaction. See `docs/evidence/R2_PHASE_N_VISUAL_ACCESSIBILITY.md`.
+- The historical R1B sacrificial observation remains historical evidence only;
+  it does not prove production migration, Login Items, FDA/TCC, or reboot/login.
+
 ## Unreleased (branch r1b/phase1b-sacrificial-observation — stacked on Phase 1A.1, non-final)
 
 - **R1B Phase 1B (sacrificial observation path):** the sealed
@@ -82,7 +98,7 @@
 
 ## v1.0.0
 
-First public release.
+Historical changelog entry; not evidence of a current public release.
 
 - Deterministic Desktop sorter (`desktidy-sort`): files loose items into
   Documents / Images / Screenshots / Videos / Audio / Archives / Code / Folders,

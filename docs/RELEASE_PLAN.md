@@ -4,6 +4,16 @@ _2026-08-14. Supersedes the implementation ordering implied by earlier roadmap
 drafts. Rule: the first native release earns trust before anything earns
 breadth. Every feature ships only when its **gate** — an executable check —
 passes. Nothing is "done" because it compiles or because an API exists._
+ 
+## Current local-RC boundary
+
+The R2 local RC is an ad-hoc Apple Silicon macOS 14+ package tested on
+non-Desktop fixtures. It is not a public release, Homebrew update, Developer
+ID-signed/notarized artifact, or authorization for live service/Desktop use.
+Its Phase N visual/accessibility lane is **INDETERMINATE**, so the release bar
+below is not met. Historical sacrificial `SMAppService` evidence does not prove
+production migration, Login Items/FDA/TCC, reboot, or login behavior.
+
 
 ## R0 — Pre-flight (before any app code) — ✅ IMPLEMENTED 2026-08-14
 
