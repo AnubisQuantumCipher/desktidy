@@ -3,7 +3,13 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 SOURCE="$REPO/assets/DeskTidyAppIcon.svg"
-OUTPUT="${1:?usage: generate-app-icon.sh /path/to/DeskTidy.icns}"
+OUTPUT_RAW="${1:?usage: generate-app-icon.sh /path/to/DeskTidy.icns}"
+OUTPUT="$(/usr/bin/python3 - "$OUTPUT_RAW" <<'PY'
+from pathlib import Path
+import sys
+print(Path(sys.argv[1]).expanduser().resolve(strict=False))
+PY
+)"
 WORK="$(mktemp -d /private/tmp/desktidy-icon-build.XXXXXX)"
 ICONSET="$WORK/DeskTidy.iconset"
 MASTER="$WORK/DeskTidy-1024.png"

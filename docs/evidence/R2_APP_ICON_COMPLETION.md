@@ -101,3 +101,17 @@ c1b08e0830efd130e4eb5c71b9c2912b25d96a6165f774bb5839dde2817fbc87
 - It does not unload, modify, or replace the personal sorter/notifier.
 - The clean probe commit is disposable verification identity, not a published
   product checkpoint.
+
+## Hosted portability scar
+
+Published checkpoint `29dbcbf6b880db63f3af2422fa196c4f52db2ba8`
+failed hosted run `31869051879` on both macOS lanes before app compilation
+completed. CI invoked `build-app.sh build`; the generator checked the safe
+relative `build/.../DeskTidy.icns` string before resolving it beneath the
+repository and rejected it. Absolute `/private/tmp` canonical runs did not
+exercise that spelling.
+
+The correction canonicalizes the requested output before applying the same
+allowlist. A clean CI-equivalent probe proved relative `build/...` succeeds;
+an output beneath `$HOME` still exits 2 and creates no file. The failed run is
+retained here rather than overwritten by the corrected hosted result.
