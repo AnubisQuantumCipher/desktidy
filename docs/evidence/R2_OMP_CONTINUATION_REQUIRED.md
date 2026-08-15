@@ -168,3 +168,26 @@ permits that explicitly authorized own-repository push, require macOS 14 and
 15 CI on the pushed exact SHA, then perform the clean-clone reseal. Do not
 merge, publish, repeat real SMAppService registration, touch the live Desktop,
 or change the personal mover.
+
+## Hermes takeover update — Phases Q and R
+
+- OMP was exited from the visible DeskTidy terminal before repository mutation.
+- The clean local checkpoint `333be039c5daf8f3b1a70751f33bcb2c0c4e2c23`
+  was fast-forward pushed to `origin/r2/full-local-native-completion-omp`.
+- Draft PR #6 retains the required stacked base
+  `r1b/phase1b-sacrificial-observation`.
+- Exact-SHA GitHub Actions run `31864111010` passed on macOS 14 and macOS 15.
+- A public clean clone at the exact checkpoint ran the canonical 44-gate
+  release runner: `38 passed, 0 failed, 3 blocked, 3 indeterminate`; the
+  independent validator accepted the blocked summary.
+- The clean-clone website production build and ESLint gate passed after
+  `npm ci` from the checked-in lockfile, with zero audit vulnerabilities.
+- A stale eight-hour Phase D `--smoke` process was terminated. Current hermetic
+  smoke gates passed, and both personal mover launch agents remained loaded.
+- No merge, publication, direct lifecycle replay, live Desktop access,
+  personal-mover mutation, or permission interaction occurred.
+
+The full receipt, commands, hashes, warnings, and residual claim boundary are
+recorded in `docs/evidence/R2_HERMES_TAKEOVER_RESEAL.md`. The remaining
+historical Phase 1B, visual/AX, and direct-lifecycle gaps stay open; detached
+CI/website evidence was not silently converted into a canonical PASS.
