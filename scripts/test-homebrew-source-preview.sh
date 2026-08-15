@@ -6,11 +6,17 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 COMMIT="$(git -C "$ROOT" rev-parse --verify HEAD^{commit})"
 WORK="$(mktemp -d /private/tmp/desktidy-homebrew-preview.XXXXXX)"
-cleanup() { find "$WORK" -depth -delete; }
+cleanup() {
+  rc=$?
+  trap - EXIT
+  find "$WORK" -depth -delete || true
+  exit "$rc"
+}
 trap cleanup EXIT
 
+git clone -q --no-hardlinks "$ROOT" "$WORK/checkout"
 if DESKTIDY_SOURCE_COMMIT="0000000000000000000000000000000000000000" \
-  "$ROOT/scripts/build-app.sh" "$WORK/mismatch" >"$WORK/mismatch.log" 2>&1; then
+  "$WORK/checkout/scripts/build-app.sh" "$WORK/mismatch" >"$WORK/mismatch.log" 2>&1; then
   echo "preview: mismatched checkout identity was accepted" >&2
   exit 1
 fi

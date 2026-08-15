@@ -2,7 +2,8 @@
 
 DeskTidy is a local-native macOS file organizer with one guarded movement
 authority, durable receipts, and exact Undo. This repository currently supports
-an **ad-hoc local deployment** on the operator Mac; it is not a public release.
+an **ad-hoc local deployment** on the operator Mac and a public source-built
+Homebrew developer preview; neither is a supported production release.
 
 ## Current status — 2026-08-15
 
@@ -34,6 +35,10 @@ an **ad-hoc local deployment** on the operator Mac; it is not a public release.
 - The installed app and local RC are arm64/macOS 14+, ad-hoc signed, and
   deep-signature verified. Exact-SHA hosted CI passes on macOS 14 and macOS 15.
   Gatekeeper rejection remains expected for this local-only artifact.
+- The Homebrew tap provides `desktidy-r2-preview` from exact tagged source. The
+  formula builds locally, remains ad-hoc signed, and performs no service
+  registration during install. The retired `desktidy` legacy formula is
+  disabled so it cannot introduce a second Desktop authority.
 - Keyboard focus-ring traversal and spoken VoiceOver output remain
   **INDETERMINATE**. Developer ID signing, notarization, TestFlight, App Store,
   and a public installer/release remain **BLOCKED** on Apple Developer Program
@@ -90,9 +95,10 @@ evidence only.
 ## Explicit non-claims
 
 This repository does not provide a Developer ID-signed or notarized build,
-public DMG, public installer, Homebrew update, TestFlight/App Store release,
+public DMG, prebuilt native Homebrew cask, TestFlight/App Store release,
 complete keyboard/VoiceOver acceptance, or verified reboot/login persistence.
-The local deployment does not imply public distribution readiness.
+The source-built Homebrew preview and local deployment do not imply supported
+public production readiness.
 
 For the bounded ad-hoc alternative, see
 [`docs/HOMEBREW_SOURCE_PREVIEW.md`](docs/HOMEBREW_SOURCE_PREVIEW.md). It defines
