@@ -127,3 +127,41 @@ Phase P must construct the canonical full-local-release gate and independent
 validator. It must preserve Phase N as indeterminate rather than convert it
 into release success, and must carry the website build dependency absence as a
 skipped verification rather than a pass.
+
+## OMP continuation update — Phase P
+
+- `db836c4 R2 Phase P: add canonical local release gate` adds the
+  repository-owned runner, independent JSON validator, gate specification, and
+  dry-run/mutation contract tests.
+- `297df4c R2 Phase P: repair recovery control fixture` corrects R0 C15's
+  planted pending receipt: recovery requires the durable artifact identity that
+  a real prepared movement receipt contains. The source recovery rule was not
+  weakened.
+- `scripts/run-full-local-release-gate.py --root . --output
+  /private/tmp/desktidy-full-local-release-20260815-rerun/summary.json`
+  exited `2` with `overall=blocked`, not failed. Its independent validator
+  accepted the summary: `valid overall=blocked gates=44`.
+- The final summary retains five missing-evidence lanes rather than converting
+  them to success: historical Phase 1B independent lifecycle acceptance and
+  Phase N visual/AX are `indeterminate`; direct install lifecycle, website
+  build dependencies, and exact-SHA hosted CI are `blocked`.
+- No DeskTidy service registration, live Desktop access, personal-mover
+  mutation, permission interaction, website deployment, merge, or publication
+  occurred during Phase P.
+
+### Restart-safe next action
+
+The exact local checkpoint is `297df4c1ac2a92dfe54d80756297820799503d37`
+on `r2/full-local-native-completion-omp`. The required Phase Q first command
+is:
+
+```text
+git push --set-upstream origin r2/full-local-native-completion-omp
+```
+
+On 2026-08-15 this command was denied before execution by
+`tools.approval.bash: deny`; no remote state changed. When the environment
+permits that explicitly authorized own-repository push, require macOS 14 and
+15 CI on this exact SHA, then perform the clean-clone reseal. Do not merge,
+publish, repeat real SMAppService registration, touch the live Desktop, or
+change the personal mover.
