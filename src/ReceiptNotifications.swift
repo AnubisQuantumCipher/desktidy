@@ -339,6 +339,7 @@ final class UNUserNotificationCenterReceiptSender: NSObject, ReceiptNotification
 final class ProductionReceiptNotificationBridge {
     private weak var core: CanonicalApplicationCore?
     private let receiptsDirectory: URL
+    private let notificationsAvailable: Bool
 
     private lazy var service: ReceiptNotificationService = {
         let router = CanonicalReceiptNotificationActionRouter(
@@ -360,8 +361,11 @@ final class ProductionReceiptNotificationBridge {
         )
     }()
 
-    init(receiptsDirectory: URL) {
+    init(receiptsDirectory: URL,
+         notificationsAvailable: Bool = Bundle.main.bundleURL.pathExtension == "app"
+            && Bundle.main.bundleIdentifier != nil) {
         self.receiptsDirectory = receiptsDirectory
+        self.notificationsAvailable = notificationsAvailable
     }
 
     func bind(core: CanonicalApplicationCore) {
@@ -369,6 +373,7 @@ final class ProductionReceiptNotificationBridge {
     }
 
     func receive(_ receipt: Receipt) {
+        guard notificationsAvailable else { return }
         service.enqueue(receipt)
     }
 }

@@ -48,7 +48,7 @@ final class DeskTidy {
     let smartItemLimit = 12
     let previewByteLimit = 24_000
     let previewCharacterLimit = 6_000
-    var lockFD: Int32 = -1
+    lazy var movementProcessLock = MovementProcessLock(url: lockURL)
 
     #if canImport(FoundationModels)
     let smartCompiledIn = true
@@ -67,8 +67,7 @@ final class DeskTidy {
     // are control surfaces, not user directories to file under Folders/.
     // Keeping the legacy names here makes the authority handoff non-destructive.
     var reservedRootNames: Set<String> {
-        Set(Category.allCases.map { $0.folderName })
-            .union(["Archive", "Docs", "Media", "Projects"])
+        Category.reservedRootNames
     }
 
     init() {
@@ -233,6 +232,12 @@ final class DeskTidy {
             return 3
         }
 
+        if let problem = ledger.verifyChain() {
+            log("LEDGER INVALID: refusing movement — \(problem)")
+            fputs("DeskTidy: receipt ledger invalid — failing closed. \(problem)\n", stderr)
+            return 4
+        }
+
         // R0 crash recovery: reconcile any interrupted movement intents
         // against filesystem truth before making new decisions.
         _ = movement.startupReconcile()
@@ -276,14 +281,18 @@ final class DeskTidy {
 
     // -- single-instance lock ----------------------------------------------
     func acquireLock() -> Bool {
-        lockFD = open(lockURL.path, O_CREAT | O_RDWR, mode_t(S_IRUSR | S_IWUSR))
-        guard lockFD >= 0 else { log("ERROR: unable to open single-instance lock"); return false }
-        guard flock(lockFD, LOCK_EX | LOCK_NB) == 0 else { close(lockFD); lockFD = -1; return false }
-        return true
+        do {
+            try movementProcessLock.acquire()
+            return true
+        } catch MovementProcessLockError.busy {
+            return false
+        } catch {
+            log("ERROR: unable to acquire movement process lock")
+            return false
+        }
     }
     func releaseLock() {
-        guard lockFD >= 0 else { return }
-        _ = flock(lockFD, LOCK_UN); close(lockFD); lockFD = -1
+        movementProcessLock.release()
     }
 
     // -- access probe (this is what fails without Full Disk Access) --------
@@ -305,6 +314,10 @@ final class DeskTidy {
     // Returns how many items were filed and how many were skipped only because
     // they were too fresh (still inside the settle window).
     func deterministicSweep() -> (moved: Int, skippedFresh: Int) {
+        guard let undoRestorations = movement.exactUndoRestorations() else {
+            log("LEDGER INVALID: refusing automatic sweep while Undo restoration state is unprovable")
+            return (0, 0)
+        }
         let keys: Set<URLResourceKey> = [.contentModificationDateKey, .isDirectoryKey, .isSymbolicLinkKey]
         let items: [URL]
         do {
@@ -326,6 +339,11 @@ final class DeskTidy {
                 let values = try item.resourceValues(forKeys: keys)
                 if values.isSymbolicLink == true {
                     log("SKIP symlink at root: \(safeLog(name))")
+                    continue
+                }
+                if let expectedIdentity = undoRestorations[name],
+                   FileArtifactIdentity.capture(at: item) == expectedIdentity {
+                    log("SKIP exact Undo restoration at root: \(safeLog(name))")
                     continue
                 }
                 let modified = values.contentModificationDate ?? Date()

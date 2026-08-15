@@ -419,6 +419,32 @@ final class MovementService {
         validatedUndoPaths(for: original) != nil
     }
 
+    /// Returns the latest exact artifacts durably restored to the watched root
+    /// by Undo. A later successful move from the same root slot consumes the
+    /// protection. The automatic sorter uses this snapshot; explicit Tidy Now
+    /// remains a user-authorized override.
+    func exactUndoRestorations() -> [String: FileArtifactIdentity]? {
+        guard ledger.verifyChain() == nil else { return nil }
+        let (receipts, malformed) = ledger.readAll()
+        guard malformed == 0 else { return nil }
+
+        var protected: [String: FileArtifactIdentity] = [:]
+        for receipt in receipts where receipt.rootCanonical == rootCanonical.path
+            && (receipt.outcome == "moved" || receipt.outcome == "recovered") {
+            if let sourceName = directRootName(from: receipt.sourceRel) {
+                protected.removeValue(forKey: sourceName)
+            }
+            if receipt.reversesReceiptID != nil,
+               let final = receipt.finalDestRel,
+               let restoredName = directRootName(from: final),
+               let identity = receipt.artifactIdentity,
+               identity.isUndoVerifiable {
+                protected[restoredName] = identity
+            }
+        }
+        return protected
+    }
+
     /// Reverse one eligible movement through this same durable mover. Undo is
     /// intentionally an exact restoration, not a collision-renaming move:
     /// when the original root slot is occupied, it refuses without moving.

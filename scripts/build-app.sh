@@ -50,6 +50,7 @@ xcrun swiftc -O -parse-as-library \
   -target "arm64-apple-macosx$MACOS_MIN" \
   "$REPO/src/Config.swift" \
   "$REPO/src/Paths.swift" \
+  "$REPO/src/MovementProcessLock.swift" \
   "$REPO/src/TargetResolver.swift" \
   "$REPO/src/NativeConfigParser.swift" \
   "$REPO/src/NativeConfiguration.swift" \

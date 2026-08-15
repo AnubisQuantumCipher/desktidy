@@ -79,6 +79,13 @@ enum Category: CaseIterable {
         case .folders:     return Config.folderFolders
         }
     }
+
+    /// Root directories retained from the authorized personal-sorter
+    /// migration are control surfaces alongside DeskTidy's native categories.
+    /// Every automatic and manual sweep uses this one compatibility set.
+    static var reservedRootNames: Set<String> {
+        Set(allCases.map(\.folderName)).union(["Archive", "Docs", "Media", "Projects"])
+    }
 }
 
 enum DeskTidyVersion { static let string = "v1.2.0" }

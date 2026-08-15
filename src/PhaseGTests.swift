@@ -56,7 +56,7 @@ final class PhaseGTests {
         return url
     }
 
-    private func fixture() -> Fixture {
+    private func fixture(movementProcessLock: MovementProcessLock? = nil) -> Fixture {
         let sandbox = temporaryDirectory("fixture")
         let root = sandbox.appendingPathComponent("watched", isDirectory: true)
         let alternate = sandbox.appendingPathComponent("alternate", isDirectory: true)
@@ -94,7 +94,8 @@ final class PhaseGTests {
                 }
                 return .allowed
             },
-            emit: { events.events.append($0) }
+            emit: { events.events.append($0) },
+            movementProcessLock: movementProcessLock
         )
         return Fixture(root: root, alternate: alternate, app: app, state: state,
                        movement: movement, core: core, events: events)
@@ -126,6 +127,8 @@ final class PhaseGTests {
         runTargetAndAuthorityChangeContracts()
         runSymlinkEscapeContract()
         runABACycleProtectionContract()
+        runProcessLockContract()
+        runLegacyRootCompatibilityContract()
         print("PHASE G GATES: \(pass) passed, \(fail) failed")
         return pass > 0 && fail == 0
     }
@@ -379,6 +382,53 @@ final class PhaseGTests {
                 && staleUndo.refusal == .invalidReceipt(first.id)
                 && fm.contents(atPath: destination(second, in: f).path) == bytes
                 && !fm.fileExists(atPath: f.root.appendingPathComponent("cycle.pdf").path)
+        )
+    }
+
+    private func runProcessLockContract() {
+        let sandbox = temporaryDirectory("process-lock")
+        let lockURL = sandbox.appendingPathComponent("desktidy.lock")
+        let coreLock = MovementProcessLock(url: lockURL)
+        let f = fixture(movementProcessLock: coreLock)
+        defer {
+            try? fm.removeItem(at: f.root.deletingLastPathComponent())
+            try? fm.removeItem(at: sandbox)
+        }
+        let bytes = Data("cross process serialization".utf8)
+        guard let original = movedReceipt(f, name: "serialized.pdf", data: bytes) else {
+            check("G13", "Undo serializes with the automatic mover's process lock", false, "initial move failed")
+            return
+        }
+        let competing = MovementProcessLock(url: lockURL)
+        try? competing.acquire()
+        let blocked = f.core.undo(receiptID: original.id)
+        competing.release()
+        let completed = f.core.undo(receiptID: original.id)
+        check(
+            "G13",
+            "Undo serializes with the automatic mover's process lock",
+            blocked.refusal == .movementBusy
+                && completed.outcome == .completed
+                && fm.contents(atPath: f.root.appendingPathComponent("serialized.pdf").path) == bytes
+        )
+    }
+
+    private func runLegacyRootCompatibilityContract() {
+        let f = fixture()
+        defer { try? fm.removeItem(at: f.root.deletingLastPathComponent()) }
+        let names = ["Archive", "Docs", "Media", "Projects"]
+        for name in names {
+            let directory = f.root.appendingPathComponent(name, isDirectory: true)
+            try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
+            try? fm.setAttributes([.modificationDate: Date(timeIntervalSinceNow: -3600)],
+                                  ofItemAtPath: directory.path)
+        }
+        let result = f.core.tidyNow()
+        check(
+            "G14",
+            "manual Tidy Now preserves legacy category roots just like the automatic mover",
+            result.moved.isEmpty
+                && names.allSatisfy { fm.fileExists(atPath: f.root.appendingPathComponent($0).path) }
         )
     }
 }

@@ -41,6 +41,8 @@ enum CanonicalCoreRefusal: Error, Equatable {
     case invalidTarget(String)
     case invalidReceipt(String)
     case receiptUnavailable
+    case movementBusy
+    case movementLockUnavailable(Int32)
 }
 
 enum CanonicalCommandOutcome: String, Codable, Equatable {
@@ -191,6 +193,7 @@ final class CanonicalApplicationCore {
     private let monotonicNow: () -> TimeInterval
     private let bootSessionID: () -> String
     private let beforeMove: () -> Void
+    private let movementProcessLock: MovementProcessLock?
     private let tidyLock = NSLock()
     private let undoLock = NSLock()
     private let pauseStateLock = NSLock()
@@ -331,7 +334,8 @@ final class CanonicalApplicationCore {
         dateNow: @escaping () -> Date = { Date() },
         monotonicNow: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
         bootSessionID: @escaping () -> String = { CanonicalApplicationCore.currentBootSessionID() },
-        beforeMove: @escaping () -> Void = {}
+        beforeMove: @escaping () -> Void = {},
+        movementProcessLock: MovementProcessLock? = nil
     ) {
         self.movement = movement
         self.nativeConfigURL = nativeConfigURL
@@ -350,6 +354,7 @@ final class CanonicalApplicationCore {
         self.monotonicNow = monotonicNow
         self.bootSessionID = bootSessionID
         self.beforeMove = beforeMove
+        self.movementProcessLock = movementProcessLock
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         self.iso = formatter
@@ -407,7 +412,10 @@ final class CanonicalApplicationCore {
                 return .allowed
             },
             emit: emit,
-            movementCompleted: { receipt in notificationBridge.receive(receipt) }
+            movementCompleted: { receipt in notificationBridge.receive(receipt) },
+            movementProcessLock: MovementProcessLock(
+                url: appDirectory.appendingPathComponent("desktidy.lock")
+            )
         )
         notificationBridge.bind(core: core)
         return core
@@ -599,6 +607,12 @@ final class CanonicalApplicationCore {
     func tidyNow() -> CanonicalTidyNowResult {
         tidyLock.lock()
         defer { tidyLock.unlock() }
+        if let refusal = acquireMovementProcessLock() {
+            _ = refused(command: .tidyNow, reason: refusal)
+            return CanonicalTidyNowResult(moved: [], failed: [], skippedFresh: 0,
+                                          refusal: refusal, receiptID: nil)
+        }
+        defer { movementProcessLock?.release() }
         switch readyForMovement() {
         case .failure(let refusal):
             _ = refused(command: .tidyNow, reason: refusal)
@@ -627,6 +641,11 @@ final class CanonicalApplicationCore {
     func undo(receiptID: String) -> CanonicalCommandResult {
         undoLock.lock()
         defer { undoLock.unlock() }
+
+        if let refusal = acquireMovementProcessLock() {
+            return refused(command: .undo, reason: refusal)
+        }
+        defer { movementProcessLock?.release() }
 
         switch readyForMovement() {
         case .failure(let refusal):
@@ -839,7 +858,7 @@ final class CanonicalApplicationCore {
             return ([], [], 0)
         }
 
-        let reserved = Set(Category.allCases.map(\.folderName))
+        let reserved = Category.reservedRootNames
         var moved: [Receipt] = []
         var failed: [Receipt] = []
         var skippedFresh = 0
@@ -912,6 +931,20 @@ final class CanonicalApplicationCore {
 
     private func now() -> String { iso.string(from: Date()) }
 
+    private func acquireMovementProcessLock() -> CanonicalCoreRefusal? {
+        guard let movementProcessLock else { return nil }
+        do {
+            try movementProcessLock.acquire()
+            return nil
+        } catch MovementProcessLockError.busy {
+            return .movementBusy
+        } catch MovementProcessLockError.unavailable(let code) {
+            return .movementLockUnavailable(code)
+        } catch {
+            return .movementLockUnavailable(EIO)
+        }
+    }
+
     private func isUndoEligible(_ original: Receipt, in receipts: [Receipt]) -> Bool {
         guard movement.ledger.verifyChain() == nil,
               !receipts.contains(where: {
@@ -935,6 +968,8 @@ final class CanonicalApplicationCore {
         case .invalidTarget(let path): return "invalid target: \(path)"
         case .invalidReceipt(let id): return "receipt is not undo eligible: \(id)"
         case .receiptUnavailable: return "command receipt storage is unavailable"
+        case .movementBusy: return "another DeskTidy movement transaction is active"
+        case .movementLockUnavailable(let code): return "movement coordination lock is unavailable (errno \(code))"
         }
     }
 }

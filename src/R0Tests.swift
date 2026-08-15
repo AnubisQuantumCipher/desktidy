@@ -572,5 +572,69 @@ final class R0Tests {
             check("C31", "legacy category roots remain at the watched root",
                   preserved && moved.isEmpty, "preserved=\(preserved) moved=\(moved.count)")
         }
+
+        // C32: a successful automatic move followed by Undo must not be
+        // immediately defeated by the next automatic launchd sweep. The exact
+        // artifact restored by the durable reversal receipt stays at root;
+        // changing or explicitly tidying it remains a separate user action.
+        do {
+            let root = tempDir("undo-restoration-root")
+            let app = tempDir("undo-restoration-app")
+            let agents = tempDir("undo-restoration-agents")
+            let name = "restored-canary.pdf"
+            let bytes = Data("exact undo restoration".utf8)
+            _ = settledFile(root, name, contents: String(decoding: bytes, as: UTF8.self))
+            setenv("DESKTIDY_TARGET_DIR", root.path, 1)
+            setenv("DESKTIDY_APP_DIR", app.path, 1)
+            setenv("DESKTIDY_AGENTS_DIR", agents.path, 1)
+            _ = await DeskTidy().run(arguments: [])
+            let ledger = ReceiptLedger(appDirectory: app)
+            let movement = MovementService(root: root, ledger: ledger,
+                                           moverVersion: engineVersion, log: { _ in })
+            let original = ledger.readAll().receipts.last { receipt in
+                receipt.sourceRel == name && receipt.outcome == "moved"
+            }
+            let reversal = original.flatMap { movement.undo(receipt: $0) }
+            _ = await DeskTidy().run(arguments: [])
+            unsetenv("DESKTIDY_TARGET_DIR"); unsetenv("DESKTIDY_APP_DIR"); unsetenv("DESKTIDY_AGENTS_DIR")
+            let successful = ledger.readAll().receipts.filter {
+                $0.outcome == "moved" || $0.outcome == "recovered"
+            }
+            check(
+                "C32",
+                "automatic sweep preserves the exact artifact restored by Undo",
+                reversal?.reversesReceiptID == original?.id
+                    && fm.contents(atPath: root.appendingPathComponent(name).path) == bytes
+                    && !fm.fileExists(atPath: root.appendingPathComponent(Config.folderDocuments)
+                        .appendingPathComponent(name).path)
+                    && successful.count == 2,
+                "successfulReceipts=\(successful.count)"
+            )
+        }
+
+        // C33: the automatic production path must not extend or move under a
+        // damaged ledger. A valid prior movement is tampered before a second
+        // settled file is presented; the engine exits fail-closed.
+        do {
+            let (root, app, ledger, movement) = makeEngineSandbox()
+            _ = moveVia(movement, settledFile(root, "seed.pdf"))
+            var ledgerText = String(data: fm.contents(atPath: ledger.ledgerURL.path) ?? Data(),
+                                    encoding: .utf8) ?? ""
+            ledgerText = ledgerText.replacingOccurrences(of: "seed.pdf", with: "Seed.pdf")
+            try? Data(ledgerText.utf8).write(to: ledger.ledgerURL, options: [.atomic])
+            let blocked = settledFile(root, "blocked-by-ledger.pdf")
+            let agents = tempDir("invalid-ledger-agents")
+            setenv("DESKTIDY_TARGET_DIR", root.path, 1)
+            setenv("DESKTIDY_APP_DIR", app.path, 1)
+            setenv("DESKTIDY_AGENTS_DIR", agents.path, 1)
+            let code = await DeskTidy().run(arguments: [])
+            unsetenv("DESKTIDY_TARGET_DIR"); unsetenv("DESKTIDY_APP_DIR"); unsetenv("DESKTIDY_AGENTS_DIR")
+            check(
+                "C33",
+                "automatic movement fails closed when the receipt ledger is invalid",
+                code == 4 && fm.fileExists(atPath: blocked.path),
+                "exit=\(code) sourcePresent=\(fm.fileExists(atPath: blocked.path))"
+            )
+        }
     }
 }

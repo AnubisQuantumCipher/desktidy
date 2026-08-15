@@ -102,6 +102,7 @@ final class PhaseFTests {
         runAuthorizationGatedDispatchContract()
         runAuthorizationRefusalContract()
         runRevealPayloadAndActionRoutingContract()
+        runUnbundledNotificationBridgeContract()
         print("PHASE F GATES: \(pass) passed, \(fail) failed")
         return pass > 0 && fail == 0
     }
@@ -338,6 +339,28 @@ final class PhaseFTests {
             "F08",
             "Reveal resolves the receipt destination through the canonical command adapter",
             recorder.urls == [expected]
+        )
+    }
+
+    private func runUnbundledNotificationBridgeContract() {
+        let f = fixture()
+        defer { try? fm.removeItem(at: f.root.deletingLastPathComponent()) }
+        settledFile(in: f.root, named: "unbundled.pdf")
+        guard let receipt = f.core.tidyNow().moved.first else {
+            check("F09", "an unbundled live-core caller skips native notification setup safely", false)
+            return
+        }
+        let bridge = ProductionReceiptNotificationBridge(
+            receiptsDirectory: f.app.appendingPathComponent("receipts"),
+            notificationsAvailable: false
+        )
+        bridge.bind(core: f.core)
+        bridge.receive(receipt)
+        let deliveryRecord = f.app.appendingPathComponent("receipts/notification-delivery-receipts.json")
+        check(
+            "F09",
+            "an unbundled live-core caller skips native notification setup safely",
+            !fm.fileExists(atPath: deliveryRecord.path)
         )
     }
 }
