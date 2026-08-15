@@ -14,6 +14,11 @@ contains an **ad-hoc local release candidate**, not a public release.
 - The RC was verified only against non-Desktop fixture paths. It has not been
   authorized to register a live service, alter a personal mover, or organize a
   real Desktop.
+- The signed app now carries an inert migration bundle: the exact sorter,
+  notifier, launch templates, source identity, hash manifest, and a
+  transactional `migrate-live.sh`. Its default is plan-only. Fake-substrate
+  gates prove ordered handoff and automatic rollback; no live cutover has been
+  executed by this source checkpoint.
 - The shared native status surface now has fixture-bound pixels, AX controls,
   and a required launch/capture gate. Keyboard focus traversal and spoken
   VoiceOver output remain **INDETERMINATE**, so this is not a complete native

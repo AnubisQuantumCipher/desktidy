@@ -154,6 +154,11 @@ PY
 
 APP="$EXTRACT/DeskTidy.app"
 APP_BIN="$APP/Contents/MacOS/DeskTidy"
+EXPECTED_COMMIT="$(/usr/bin/python3 - "$EXTRACT/$MANIFEST_NAME" <<'PY'
+import json, sys
+print(json.load(open(sys.argv[1], encoding="utf-8"))["source"]["commit"])
+PY
+)"
 ARCHS="$(lipo -archs "$APP_BIN")"
 [ "$ARCHS" = "arm64" ] || { echo "verify: expected arm64-only executable, found: $ARCHS" >&2; exit 1; }
 MINIMUM_MACOS="$(/usr/libexec/PlistBuddy -c 'Print :LSMinimumSystemVersion' "$APP/Contents/Info.plist")"
@@ -165,6 +170,7 @@ case "$SIGNING_DETAILS" in
 esac
 codesign --verify --deep --strict "$APP"
 "$ROOT/scripts/test-app-icon.sh" "$APP"
+"$ROOT/scripts/test-migration-bundle.sh" "$APP" "$EXPECTED_COMMIT"
 if spctl --assess --type execute --verbose=4 "$APP" >/dev/null 2>&1; then
   OBSERVED_GATEKEEPER="accepted"
 else

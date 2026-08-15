@@ -9,7 +9,10 @@ passes. Nothing is "done" because it compiles or because an API exists._
 
 The R2 local RC is an ad-hoc Apple Silicon macOS 14+ package tested on
 non-Desktop fixtures. It is not a public release, Homebrew update, Developer
-ID-signed/notarized artifact, or authorization for live service/Desktop use.
+ID-signed/notarized artifact, or evidence that live service/Desktop migration
+has run. The app contains a plan-first, explicit-execute migration transaction
+with fake-substrate rollback gates; the live cutover remains a separate
+operator-authorized observation.
 Its Phase N visual/accessibility lane is **INDETERMINATE**, so the release bar
 below is not met. Historical sacrificial `SMAppService` evidence does not prove
 production migration, Login Items/FDA/TCC, reboot, or login behavior.
@@ -19,7 +22,7 @@ production migration, Login Items/FDA/TCC, reboot, or login behavior.
 
 | Item | Implementation | Gate (executable) |
 |---|---|---|
-| **Single-mover guard** — one authority per canonical watched root; every setup/start/move path refuses when a foreign launchd agent watches the same (symlink-resolved, device/inode-compared) root; ambiguity fails closed; takeover is deliberately NOT implemented | `AuthorityGuard` in [`src/Authority.swift`](../src/Authority.swift); wired into engine startup (`DeskTidy.run`), `desktidy setup` (`src/desktidy-cli.sh`), and `install.sh`; diagnose via `desktidy-sort --authority-diagnose [--json]` | `--r0-test` controls C01–C06 (same root, symlink-equivalent root, disjoint allowed, unreadable→fail-closed, stale-vs-loaded, engine refusal exit 2) |
+| **Single-mover guard** — one authority per canonical watched root; ordinary setup/start/move paths refuse foreign overlap. The separately authorized migration path stages while unloaded, re-enumerates launch-agent watchers, boots out the old notifier and sorter before starting the new sorter and notifier, and automatically restores the bound old epoch on failure. | `AuthorityGuard` in [`src/Authority.swift`](../src/Authority.swift) plus plan-first [`scripts/migrate-live.sh`](../scripts/migrate-live.sh); no live cutover is claimed | `--r0-test` controls C01–C06 plus `scripts/test-live-migration.sh` fake-substrate ordering, prior-install, foreign-authority, and rollback cases |
 | **Canonical receipts** — schema v1, one append-only JSONL ledger with SHA-256 hash chain (unkeyed: integrity evidence, not author authentication), durable prepare→move→complete protocol, deterministic crash reconciliation (`failed` / `recovered` / `indeterminate` — never invented success), single history reader for status/history and future Undo | `Receipt`, `ReceiptLedger`, `MovementService` in [`src/Receipts.swift`](../src/Receipts.swift); `--history [n] [--json]`, `--verify-ledger`; full spec in [`R0_AUTHORITY_AND_RECEIPTS.md`](R0_AUTHORITY_AND_RECEIPTS.md) | `--r0-test` controls C07–C19 (durability, races, syscall failure, four restart states, malformed intent, digest tamper) |
 | **Movement confinement** — sources must be direct non-symlink children of the root; destinations must resolve inside the root; `..`/symlink escapes rejected before any write | `MovementService.validateConfinement` | `--r0-test` controls C20–C23 |
 | **ML authority policy adopted** ([ML_AUTHORITY_POLICY.md](ML_AUTHORITY_POLICY.md)) — probabilistic output cannot authorize movement | suggestions lane unchanged (write-only); movement service takes routes only from the deterministic classifier | `--r0-test` control C26 (a hostile suggestion file moves nothing) + C25 (Inbox fallback) |

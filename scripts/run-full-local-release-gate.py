@@ -203,6 +203,7 @@ def main() -> None:
         "lifecycle-uninstall-plan": ["scripts/plan-local-rc-lifecycle.sh", "--plan", "uninstall", str(work / "lifecycle/DeskTidy.app")],
         "cli-status": ["scripts/test-cli-status.sh", str(binary)],
         "smoke-isolation": ["scripts/test-smoke-isolation.sh"],
+        "live-migration-transaction": ["scripts/test-live-migration.sh"],
         "claims-mutation-control": ["scripts/test-claims-scan.sh"],
     }
     for identifier, command in script_commands.items():

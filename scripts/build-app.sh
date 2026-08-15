@@ -43,6 +43,8 @@ fi
 SOURCE_COMMIT="$(git -C "$REPO" rev-parse --verify HEAD^{commit})"
 
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+MIGRATION="$APP/Contents/Resources/Migration"
+mkdir -p "$MIGRATION"
 
 xcrun swiftc -O -parse-as-library \
   -target "arm64-apple-macosx$MACOS_MIN" \
@@ -90,7 +92,26 @@ cat > "$APP/Contents/Resources/DeskTidyBuild.json" <<BUILDINFO
 BUILDINFO
 
 "$REPO/scripts/generate-app-icon.sh" "$APP/Contents/Resources/DeskTidy.icns"
+# The migration bundle is staged inside the signed app but remains inert until
+# migrate-live.sh is invoked with --execute and an exact rollback epoch.
+CLI_SOURCES=("$REPO"/src/*.swift)
+xcrun swiftc -O -parse-as-library \
+  -target "arm64-apple-macosx$MACOS_MIN" \
+  "${CLI_SOURCES[@]}" \
+  -o "$MIGRATION/desktidy-sort"
+codesign -s - -i com.desktidy.sort --force "$MIGRATION/desktidy-sort"
+/usr/bin/ditto "$REPO/src/desktidy-notify.sh" "$MIGRATION/desktidy-notify.sh"
+/usr/bin/ditto "$REPO/launchagents/com.desktidy.sort.plist.template" "$MIGRATION/com.desktidy.sort.plist.template"
+/usr/bin/ditto "$REPO/launchagents/com.desktidy.notify.plist.template" "$MIGRATION/com.desktidy.notify.plist.template"
+/usr/bin/ditto "$REPO/scripts/migrate-live.sh" "$MIGRATION/migrate-live.sh"
+chmod 755 "$MIGRATION/desktidy-sort" "$MIGRATION/desktidy-notify.sh" "$MIGRATION/migrate-live.sh"
+printf 'sourceCommit=%s\n' "$SOURCE_COMMIT" > "$MIGRATION/IDENTITY"
+(
+  cd "$MIGRATION"
+  find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 shasum -a 256 > SHA256SUMS
+)
 codesign -s - -i com.desktidy.app --force "$APP"
 "$REPO/scripts/test-app-icon.sh" "$APP"
+"$REPO/scripts/test-migration-bundle.sh" "$APP" "$SOURCE_COMMIT"
 echo "built local-only ad-hoc app: $APP"
 echo "signing: ad-hoc (-); not Developer ID signed, not notarized, and not for distribution"

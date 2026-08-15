@@ -31,6 +31,7 @@
     {"id": "native-status-surface", "required": true},
     {"id": "local-rc-package", "required": true},
     {"id": "local-rc-verify", "required": true},
+    {"id": "live-migration-transaction", "required": true},
     {"id": "archive-symlink-control", "required": true},
     {"id": "lifecycle-install-plan", "required": true},
     {"id": "lifecycle-upgrade-plan", "required": true},
