@@ -13,12 +13,12 @@ register an `SMAppService`, replace a plist, or load a second Desktop mover.
 
 | Surface | Exact binding |
 |---|---|
-| DeskTidy source tag | `v1.2.0-preview.1` |
-| DeskTidy source commit | `19355ff83c610fb4251af2bc593d0460c3e894eb` |
-| GitHub tag archive SHA-256 | `847789b256ca51425aa28bf2d7e4bdee97dbbc758cf17da2b667d54fdb49a9ba` |
-| Tap commit | `504f157f9ef48d19d24b18730f8d0e7e35a17a78` |
+| DeskTidy source tag | `v1.2.0-preview.2` |
+| DeskTidy source commit | `8b6c09a9b85b5ef382bb76d0e0df7e3c1f7f2a24` |
+| GitHub tag archive SHA-256 | `15d46b3c829a1af2e212b52f00888198ab51ef0d24838d71edca73918df076a8` |
+| Tap commit | `c8f9e6a9bc8020333c3427ee5c361e0236587e88` |
 | Formula | `anubisquantumcipher/tap/desktidy-r2-preview` |
-| Formula version | `1.2.0-preview.1` |
+| Formula version | `1.2.0-preview.2` |
 
 The tap also disables the old `desktidy` formula with the reason that it
 installs the retired legacy Desktop authority.
@@ -33,12 +33,12 @@ The published formula passed:
 - local app compilation through `scripts/build-app.sh`;
 - `brew test`, including exact `sourceCommit` JSON equality and strict deep
   code-signature verification;
-- `brew info`, which reported version `1.2.0-preview.1`, Apple silicon, and
+- `brew info`, which reported version `1.2.0-preview.2`, Apple silicon, and
   macOS 14 or newer.
 
 The installed preview reported bundle identifier `com.desktidy.app`,
 `Signature=adhoc`, no Team ID, and source commit
-`19355ff83c610fb4251af2bc593d0460c3e894eb`.
+`8b6c09a9b85b5ef382bb76d0e0df7e3c1f7f2a24`.
 
 ## Authority invariants across install and uninstall
 

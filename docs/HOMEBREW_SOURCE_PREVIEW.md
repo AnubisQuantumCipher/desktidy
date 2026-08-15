@@ -31,11 +31,14 @@ desktidy-r2-preview
 Formula-only trust is deliberate; whole-tap trust is neither requested nor
 required. The formula is bound to:
 
-- tag: `v1.2.0-preview.1`
-- source commit: `19355ff83c610fb4251af2bc593d0460c3e894eb`
+- tag: `v1.2.0-preview.2`
+- source commit: `8b6c09a9b85b5ef382bb76d0e0df7e3c1f7f2a24`
 - GitHub source archive SHA-256:
-  `847789b256ca51425aa28bf2d7e4bdee97dbbc758cf17da2b667d54fdb49a9ba`
-- tap commit: `504f157f9ef48d19d24b18730f8d0e7e35a17a78`
+  `15d46b3c829a1af2e212b52f00888198ab51ef0d24838d71edca73918df076a8`
+- tap commit: `c8f9e6a9bc8020333c3427ee5c361e0236587e88`
+
+Preview 2 supersedes preview 1 because it restores the exact five-root Desktop
+contract and prevents flat native category folders from appearing at the root.
 
 The former `desktidy` CLI formula is disabled because its setup path installs
 the retired Desktop authority. It must not be enabled beside native DeskTidy.
