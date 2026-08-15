@@ -290,14 +290,15 @@ final class R0Tests {
 
     // -- crash recovery (controls 14–19) -------------------------------------
     private func plantIntent(_ svc: MovementService, _ ledger: ReceiptLedger,
-                             sourceRel: String, destRel: String) -> Receipt {
+                             sourceRel: String, destRel: String,
+                             artifactIdentity: FileArtifactIdentity? = nil) -> Receipt {
         var r = Receipt(id: UUID().uuidString, preparedAt: ledger.now(), completedAt: nil,
                         moverLabel: "com.desktidy.sort", moverVersion: engineVersion,
                         rootCanonical: svc.rootCanonical.path, sourceRel: sourceRel,
                         plannedDestRel: destRel, finalDestRel: nil, ruleID: "test",
                         rulePolicyVersion: "1", settleMTime: ledger.now(), settleAgeSeconds: 99,
                         collision: nil, outcome: "prepared", failureCode: nil,
-                        undoEligible: false, prevDigest: "", digest: "")
+                        undoEligible: false, artifactIdentity: artifactIdentity, prevDigest: "", digest: "")
         try! ledger.writePending(r)
         r.completedAt = nil
         return r
@@ -321,8 +322,15 @@ final class R0Tests {
             let (root, _, ledger, svc) = makeEngineSandbox()
             let docs = root.appendingPathComponent(Config.folderDocuments)
             try? fm.createDirectory(at: docs, withIntermediateDirectories: true)
-            fm.createFile(atPath: docs.appendingPathComponent("done.pdf").path, contents: Data("d".utf8))
-            _ = plantIntent(svc, ledger, sourceRel: "done.pdf", destRel: "\(Config.folderDocuments)/done.pdf")
+            let destination = docs.appendingPathComponent("done.pdf")
+            fm.createFile(atPath: destination.path, contents: Data("d".utf8))
+            _ = plantIntent(
+                svc,
+                ledger,
+                sourceRel: "done.pdf",
+                destRel: "\(Config.folderDocuments)/done.pdf",
+                artifactIdentity: FileArtifactIdentity.capture(at: destination)
+            )
             _ = svc.startupReconcile()
             let r = ledger.readAll().receipts.last
             check("C15", "restart: dest present → recovered + undo-eligible",
